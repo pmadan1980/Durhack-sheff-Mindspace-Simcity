@@ -1,4 +1,4 @@
-import { districts, type Config, type District, type Round } from "./simulation";
+import { districts, fmt, type Config, type District, type Round, type State } from "./simulation";
 
 export interface Impact { id: string; title: string; detail: string; district: District }
 const outcome = (result: boolean | null, pending: string, met: string, missed: string) =>
@@ -32,7 +32,42 @@ export function networkStrength(r: Round, c: Config): Record<District, number> {
   const clamp = (v: number) => Math.max(0, Math.min(1, v));
   return { A: clamp(r.after.taskProgress / c.taskGoal), C: c.connectionGoal ? clamp(r.after.connectionProgress / c.connectionGoal) : 0, D: clamp((r.after.method - 1) / Math.max(0.001, c.methodCap - 1)), R: clamp(r.after.energy / c.energyCap) };
 }
-export const sameWorld = (a: Round, b: Round) => districts.every((d) => {
-  const key = ({ A: "taskProgress", C: "connectionProgress", D: "method", R: "energy" } as const)[d];
-  return Math.abs(a.after[key] - b.after[key]) < 1e-8;
-});
+const resource = { A: "taskProgress", C: "connectionProgress", D: "method", R: "energy" } as const;
+
+export function sameState(a: State, b: State) {
+  return a.day === b.day && a.taskResult === b.taskResult &&
+    a.connectionResult === b.connectionResult &&
+    districts.every(d => Math.abs(a[resource[d]] - b[resource[d]]) < 1e-8);
+}
+
+export const sameWorld = (a: Round, b: Round) => sameState(a.after, b.after);
+
+export function comparisonMeasures(a: State, b: State, rules: Config) {
+  const goals = { A: rules.taskGoal, C: rules.connectionGoal, D: rules.methodCap, R: rules.energyCap };
+  const labels = {
+    A: rules.taskType[0].toUpperCase() + rules.taskType.slice(1),
+    C: "Visit",
+    D: "Method",
+    R: "Energy",
+  };
+  return districts.filter(d => d !== "C" || rules.connectionGoal > 0).map(district => {
+    const value = (state: State) => state[resource[district]];
+    const status = (state: State) => district === "A" ? state.taskResult : district === "C" ? state.connectionResult : null;
+    const display = (state: State) => {
+      if (district === "D") return `${fmt(value(state), 2)}×`;
+      return `${fmt(value(state), 2)} / ${fmt(goals[district], 2)}`;
+    };
+    const level = (state: State) => {
+      const floor = district === "D" ? 1 : 0;
+      const span = Math.max(0.001, goals[district] - floor);
+      return Math.min(1, Math.max(0, (value(state) - floor) / span));
+    };
+    return {
+      district,
+      label: labels[district],
+      changed: status(a) !== status(b) || fmt(value(a), 2) !== fmt(value(b), 2),
+      a: { text: display(a), level: level(a), result: status(a) },
+      b: { text: display(b), level: level(b), result: status(b) },
+    };
+  });
+}

@@ -1,8 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { branch, createWorld, judgeSetup, policies, resolve } from "../src/simulation";
-import { impactMoments, networkStrength, worldCaption } from "../src/parallelStory";
+import { branch, createWorld, judgeSetup, policies, proposalsForDay, resolve, taskTypes } from "../src/simulation";
+import { comparisonMeasures, impactMoments, networkStrength, sameState, worldCaption } from "../src/parallelStory";
 
 describe("parallel-world visual storytelling", () => {
+  it("uses the confirmed task type and only shows configured outcomes", () => {
+    for (const taskType of taskTypes) {
+      const { state, rules } = createWorld({ ...judgeSetup, taskType, visitLastDay: 0 });
+      const round = resolve(state, proposalsForDay(1, undefined, rules), rules);
+      const alternative = branch(round, round.policies.find(policy => policy.id !== round.policy.id)!.id, rules);
+      const measures = comparisonMeasures(round.after, alternative.after, rules);
+      expect(measures.map(measure => measure.district)).toEqual(["A", "D", "R"]);
+      expect(measures[0].label.toLowerCase()).toBe(taskType);
+      expect(comparisonMeasures(state, state, rules).every(measure => !measure.changed)).toBe(true);
+    }
+  });
+
+  it("shows a deadline status change even when the amount of work matches", () => {
+    const { state, rules } = createWorld(judgeSetup);
+    const met = { ...state, taskProgress: rules.taskGoal, taskResult: true };
+    const pending = { ...met, taskResult: null };
+    expect(sameState(met, pending)).toBe(false);
+    expect(comparisonMeasures(met, pending, rules)[0]).toMatchObject({
+      changed: true, a: { result: true }, b: { result: null },
+    });
+  });
   it("ties highlights and artwork to the actual outcomes without mutating them", () => {
     const { state, rules } = createWorld({ ...judgeSetup, taskType: "assignment" });
     const a = resolve(state, policies, rules);

@@ -40,6 +40,7 @@ import {
   type State,
 } from "./simulation";
 import { memoriesFor } from "./memories";
+import MemoryShelf from "./MemoryShelf";
 import { voices } from "./dialogue";
 import VoiceIcon from "./VoiceIcon";
 import type { Cue } from "./journey";
@@ -160,6 +161,7 @@ interface Props {
   free: boolean;
   onApply: (setup: Setup) => void;
   onInspect: (day: number) => void;
+  onReplayMemory: (day: number) => void;
   onHelp: () => void;
   onPlay: () => void;
   onStep: () => void;
@@ -500,7 +502,7 @@ export default function MindUniverse(props: Props) {
                     ? room === "hub"
                       ? "Choose an island or follow a pathway."
                       : "You’ve arrived. Stay curious."
-                    : "Following the neural pathways…"}
+                    : `Travelling to ${info.title}…`}
                 </span>
               </div>
               )}
@@ -780,79 +782,16 @@ export default function MindUniverse(props: Props) {
                 </motion.section>
               )}
               {room === "memory" && !props.staged && (
-                <section className="memory-shelf cosmic-panel glass">
-                  <span className="cosmic-eyebrow">
-                    ONLY MOMENTS THAT REALLY HAPPENED
-                  </span>
-                  <h2>
-                    {memories.length
-                      ? "A constellation of moments."
-                      : "Your story is still unwritten."}
-                  </h2>
-                  {memories.length ? (
-                    <>
-                      <label htmlFor="memory-select">Choose a memory</label>
-                      <select
-                        id="memory-select"
-                        value={memoryId ?? ""}
-                        onChange={(e) => setMemoryId(e.target.value)}
-                      >
-                        <option value="" disabled>
-                          Follow a glowing orb…
-                        </option>
-                        {memories.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            Day {m.day} / {m.title}
-                          </option>
-                        ))}
-                      </select>
-                      {memory && (
-                        <motion.div
-                          className="selected-memory"
-                          key={memory.id}
-                          {...motionProps}
-                          animate={{ opacity: 1, y: 0 }}
-                        >
-                          <span
-                            className="memory-gem"
-                            style={{
-                              color: districtInfo[memory.district].color,
-                            }}
-                          >
-                            ◈
-                          </span>
-                          <span className="cosmic-eyebrow">
-                            DAY {memory.day} ·{" "}
-                            {memory.manual ? "INTERVENTION" : "ELECTED CHOICE"}
-                          </span>
-                          <h3>{memory.title}</h3>
-                          <p>{memory.outcome}</p>
-                          <small>{memory.choice}</small>
-                          <button
-                            className="journey-link"
-                            onClick={() => props.onInspect(memory.day)}
-                          >
-                            Trace this moment in the Observatory{" "}
-                            <ArrowRight size={14} />
-                          </button>
-                        </motion.div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <p>
-                        Resolve your first day and its real outcomes become
-                        glowing memories.
-                      </p>
-                      <button
-                        className="journey-link"
-                        onClick={() => visit("decision")}
-                      >
-                        Make a first memory <ArrowRight size={14} />
-                      </button>
-                    </>
-                  )}
-                </section>
+                <MemoryShelf
+                  history={history}
+                  rules={rules}
+                  memories={memories}
+                  memory={memory}
+                  onSelect={setMemoryId}
+                  onInspect={props.onInspect}
+                  onReplay={props.onReplayMemory}
+                  onFirstDay={() => visit("decision")}
+                />
               )}
               <div
                 className={`room-content ${arrived ? "has-arrived" : "is-travelling"}`}

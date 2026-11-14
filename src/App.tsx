@@ -284,7 +284,8 @@ export default function App() {
     setHorizon(null);
     dispatch({ type: "pause" });
     audio.reset();
-    const alternative = round.policies.find((p) => p.id !== round.policy.id)!;
+    const alternative = round.policies.find((p) => p.id !== round.policy.id);
+    if (!alternative) return;
     setPair({ a: structuredClone(round), b: branch(round, alternative.id, c) });
     setMix(0.5);
     setComparePlaying(true);
@@ -424,6 +425,10 @@ export default function App() {
       onInspect={(day) => {
         setSelectedDay(day);
         navigate("Observatory");
+      }}
+      onReplayMemory={(day) => {
+        const round = roundFor(history, day);
+        if (round) { setSelectedDay(day); compare(round); }
       }}
       onHelp={() => setHelp(true)}
       playing={tab === "Compare" ? comparePlaying : playing}
@@ -697,7 +702,7 @@ export default function App() {
               />
             )}
 
-            {(room === "memory" || room === "observatory") && (
+            {room === "observatory" && (
               <section className="timeline panel">
                 <div className="timeline-heading">
                   <div>
@@ -924,21 +929,17 @@ function Resource({
 }
 function Budget({ policy }: { policy: Policy }) {
   return (
-    <div
-      className="budget-strip"
-      aria-label={districts
-        .map((d) => `${districtInfo[d].name} ${policy.allocation[d]}`)
-        .join(", ")}
-    >
-      {districts.flatMap((d) =>
-        Array.from({ length: policy.allocation[d] }, (_, i) => (
-          <span
-            key={`${d}-${i}`}
-            style={{ background: districtInfo[d].color }}
-            title={`${districtInfo[d].name}: ${policy.allocation[d]}`}
-          />
-        )),
-      )}
+    <div className="allocation-breakdown">
+      <small>Time blocks</small>
+      <div className="allocation-parts">
+        {districts.filter(d => policy.allocation[d] > 0).map(d => (
+          <span key={d} style={{ "--voice": districtInfo[d].color } as React.CSSProperties}>
+            <VoiceIcon d={d} size={21} />
+            <span>{districtInfo[d].name}</span>
+            <b>×{policy.allocation[d]}</b>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -979,9 +980,7 @@ function Candidate({
       </div>
       <Budget policy={policy} />
       <div className="budget-caption">
-        <span>
-          {districts.map((d) => `${d}${policy.allocation[d]}`).join(" · ")}
-        </span>
+
         <button
           className="text-button"
           disabled={locked}

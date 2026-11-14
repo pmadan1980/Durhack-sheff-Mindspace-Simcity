@@ -1,31 +1,25 @@
 import { useId } from "react";
-import { districtInfo, type District } from "./simulation";
+import type { District } from "./simulation";
+import { voicePalette } from "./voicePalette";
 
-/** Original, cute character marks for the four voices (2D twins of the 3D personas). */
-export default function VoiceIcon({
-  d,
-  size = 40,
-  speaking = false,
-  title,
-}: {
+const silhouettes: Record<District, string> = {
+  A: "M50 11 C56 11 59 33 65 37 C71 41 89 37 91 44 C94 51 75 59 73 66 C71 73 81 87 74 90 C66 94 57 80 50 80 C43 80 33 94 26 90 C19 87 29 73 27 66 C25 59 6 51 9 44 C11 37 29 41 35 37 C41 33 44 11 50 11Z",
+  C: "M50 88 C32 79 12 61 12 43 C12 20 36 16 50 32 C64 16 88 20 88 43 C88 61 68 79 50 88Z",
+  D: "M56 11 C51 15 54 27 62 35 C72 44 81 52 81 66 C81 83 67 91 50 91 C32 91 20 82 20 65 C20 49 34 38 41 26 C47 16 51 11 56 11Z",
+  R: "M25 83 C13 83 7 75 7 66 C7 56 14 50 23 50 C26 39 34 34 43 36 C48 25 64 24 72 36 C78 38 82 44 83 49 C91 50 95 56 95 64 C95 74 89 82 77 83Z",
+};
+
+export default function VoiceIcon({ d, size = 40, speaking = false, title }: {
   d: District;
   size?: number;
   speaking?: boolean;
   title?: string;
 }) {
   const id = useId().replace(/:/g, "");
-  const c = districtInfo[d].color;
-  const body = {
-    // Achievement: a determined little spark-star.
-    A: "M50 8 C55 8 57 30 62 34 C67 38 90 36 92 41 C94 46 74 58 72 64 C70 70 80 90 76 93 C72 96 56 82 50 82 C44 82 28 96 24 93 C20 90 30 70 28 64 C26 58 6 46 8 41 C10 36 33 38 38 34 C43 30 45 8 50 8 Z",
-    // Connection: a warm, round heart-ish blob.
-    C: "M50 90 C34 80 12 66 12 44 C12 28 24 18 36 18 C43 18 47 22 50 27 C53 22 57 18 64 18 C76 18 88 28 88 44 C88 66 66 80 50 90 Z",
-    // Discovery: a curious teardrop wisp with a curl.
-    D: "M58 8 C52 10 50 18 54 24 C62 34 80 48 80 64 C80 81 66 92 50 92 C34 92 20 81 20 64 C20 46 38 32 46 20 C50 14 52 9 58 8 Z",
-    // Recovery: a sleepy, cosy cloud.
-    R: "M24 82 C12 82 6 74 6 65 C6 56 13 50 21 50 C20 38 30 28 42 30 C47 20 60 16 70 24 C78 30 80 38 79 44 C89 44 95 52 95 62 C95 73 87 82 76 82 Z",
-  }[d];
-  const eyes = { A: [40, 60, 52], C: [38, 62, 50], D: [40, 60, 62], R: [38, 62, 62] }[d];
+  const { light, clay, shade, cheek } = voicePalette[d];
+  const faceY = d === "A" ? 54 : d === "C" ? 50 : 61;
+  const ink = "#382631";
+
   return (
     <svg
       className={`voice-icon voice-${d}${speaking ? " is-speaking" : ""}`}
@@ -37,58 +31,37 @@ export default function VoiceIcon({
       aria-hidden={title ? undefined : true}
     >
       <defs>
-        <radialGradient id={`g${id}`} cx="40%" cy="35%" r="70%">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.85" />
-          <stop offset="0.35" stopColor={c} />
-          <stop offset="1" stopColor={c} stopOpacity="0.85" />
+        <radialGradient id={`${id}-clay`} cx="35%" cy="24%" r="83%">
+          <stop stopColor={light} />
+          <stop offset=".56" stopColor={clay} />
+          <stop offset="1" stopColor={shade} />
         </radialGradient>
-        <filter id={`f${id}`} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="4" />
-        </filter>
+        <radialGradient id={`${id}-shadow`}>
+          <stop stopColor="#080510" stopOpacity=".66" />
+          <stop offset="1" stopColor="#080510" stopOpacity="0" />
+        </radialGradient>
       </defs>
-      <path d={body} fill={c} opacity="0.55" filter={`url(#f${id})`} />
-      <path d={body} fill={`url(#g${id})`} stroke="#ffffff66" strokeWidth="1.5" />
-      {d === "R" ? (
-        <>
-          <path d={`M${eyes[0] - 7} ${eyes[2]} q7 6 14 0`} stroke="#1d1b3a" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-          <path d={`M${eyes[1] - 7} ${eyes[2]} q7 6 14 0`} stroke="#1d1b3a" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-          <path className="vi-mouth" d="M44 72 q6 4 12 0" stroke="#1d1b3a" strokeWidth="3" fill="none" strokeLinecap="round" />
-          <text x="80" y="26" fontSize="16" fontWeight="700" fill="#e8fff4">z</text>
-        </>
-      ) : (
-        <>
-          <g className="vi-eyes">
-          {[eyes[0], eyes[1]].map((x) => (
-            <g key={x}>
-              <ellipse cx={x} cy={eyes[2]} rx="8.5" ry={d === "D" ? 11 : 10} fill="#fff" />
-              <circle cx={x + (d === "D" ? 1 : 0)} cy={eyes[2] + (d === "D" ? -2 : 1)} r="5.5" fill="#1d1b3a" />
-              <circle cx={x + 2.5} cy={eyes[2] - 2.5} r="2" fill="#fff" />
-            </g>
-          ))}
+      <ellipse cx="50" cy="90" rx="43" ry="8" fill={`url(#${id}-shadow)`} />
+      <path d={silhouettes[d]} transform="translate(0 3)" fill={shade} />
+      <path d={silhouettes[d]} fill={`url(#${id}-clay)`} />
+      <g transform={`translate(0 ${faceY})`}>
+        <path d="M32 8a5 3 0 1 0 0 .01M68 8a5 3 0 1 1 0 .01" fill={cheek} opacity=".55" />
+        {d === "R" ? (
+          <path d="M35 0q5 5 10 0m10 0q5 5 10 0" stroke={ink} strokeWidth="2.6" fill="none" strokeLinecap="round" />
+        ) : (
+          <g className="vi-eyes" fill={ink}>
+            <ellipse cx="40" cy="0" rx="3.5" ry="5.2" />
+            <ellipse cx="60" cy="0" rx="3.5" ry="5.2" />
+            <circle cx="39" cy="-1.6" r="1" fill={light} />
+            <circle cx="59" cy="-1.6" r="1" fill={light} />
           </g>
-          {d === "A" && (
-            <>
-              <path d="M31 40 l14 5" stroke="#1d1b3a" strokeWidth="3.5" strokeLinecap="round" />
-              <path d="M69 40 l-14 5" stroke="#1d1b3a" strokeWidth="3.5" strokeLinecap="round" />
-              <path className="vi-mouth" d="M43 68 q7 5 14 0" stroke="#1d1b3a" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-            </>
-          )}
-          {d === "C" && (
-            <>
-              <ellipse cx="27" cy="62" rx="6" ry="3.5" fill="#ff3d6e" opacity="0.5" />
-              <ellipse cx="73" cy="62" rx="6" ry="3.5" fill="#ff3d6e" opacity="0.5" />
-              <path className="vi-mouth" d="M40 64 q10 10 20 0" stroke="#1d1b3a" strokeWidth="3.5" fill="#7a1f3a" strokeLinecap="round" />
-            </>
-          )}
-          {d === "D" && (
-            <>
-              <path d="M33 47 q7 -6 13 -2" stroke="#1d1b3a" strokeWidth="3" fill="none" strokeLinecap="round" />
-              <circle className="vi-mouth" cx="50" cy="79" r="3.5" fill="#1d1b3a" />
-              <path d="M76 6 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 Z" fill="#fff" />
-            </>
-          )}
-        </>
-      )}
+        )}
+        {d === "A" && <path d="M35 -10l9 3m12 0l9 -3" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />}
+        {d === "D" && <path d="M34 -9q5-4 11-1m10 2q5-3 10 1" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />}
+        <path className="vi-mouth" d="M45 10q5 5 10 0" stroke={ink} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      </g>
+      {d === "D" && <path d="M77 13l2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill={light} />}
+      {d === "R" && <path d="M79 27a9 9 0 1 0 9 11 8 8 0 0 1-9-11Z" fill="#f8dfad" />}
     </svg>
   );
 }
