@@ -2,7 +2,6 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
-  AudioLines,
   Check,
   GitBranch,
   Headphones,
@@ -13,8 +12,6 @@ import {
   RotateCcw,
   Settings2,
   SkipForward,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import {
@@ -196,9 +193,9 @@ export default function App() {
           ? comparePlaying
           : free
             ? playing
-            : listening || room === "symphony"),
+            : listening || (scene === "debate" && staged)),
     );
-  }, [entered, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, room]);
+  }, [entered, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, scene, staged]);
   async function enableSound() {
     try {
       const enabled = await audio.enable();
@@ -338,6 +335,7 @@ export default function App() {
       inProgress={scene !== "thought"}
       onRelease={(next, text) => {
         audio.reset();
+        if (!soundOn && !muted) void enableSound();
         setThought(text);
         setPair(null);
         setSelectedDay(null);
@@ -365,7 +363,7 @@ export default function App() {
             solo={solo}
             onSound={() => {
               setMuted(false);
-              void enableSound().then(() => setListening(true));
+              void enableSound().then(() => setListening(scene !== "debate"));
             }}
             listening={listening}
             onListen={setListening}
@@ -894,98 +892,6 @@ export default function App() {
                 election={election}
                 policies={proposals}
               />
-            )}
-
-            {room === "symphony" && (
-              <>
-                <section
-                  className={`sound-desk ${soundOn && (playing || (tab === "Compare" && comparePlaying)) ? "is-sounding" : ""}`}
-                  aria-label="Sound controls"
-                >
-                  <div className="sound-title">
-                    <AudioLines size={23} />
-                    <div>
-                      <span className="eyebrow">THE WORLD’S COMPOSITION</span>
-                      <small>
-                        {soundOn
-                          ? `${audioConfig.bpm} BPM · C pentatonic`
-                          : "Best explored with headphones"}
-                      </small>
-                    </div>
-                  </div>
-                  <div className="part-controls">
-                    {districts.map((d) => (
-                      <button
-                        key={d}
-                        aria-pressed={solo === d}
-                        className={solo === d ? "solo-active" : ""}
-                        onClick={() => {
-                          setSolo(solo === d ? null : d);
-                        }}
-                        style={
-                          {
-                            "--district": districtInfo[d].color,
-                          } as React.CSSProperties
-                        }
-                      >
-                        <span className="part-icon">
-                          <VoiceIcon d={d} size={30} />
-                        </span>
-                        <span>
-                          {districtInfo[d].name}
-                          <small>
-                            {solo === d
-                              ? "SOLO · CLICK TO RELEASE"
-                              : districtInfo[d].voice}
-                          </small>
-                        </span>
-                        <span className="mini-wave">
-                          {[1, 2, 3, 4, 5].map((n) => (
-                            <i
-                              key={n}
-                              style={{
-                                height: `${[8, 17, 24, 12, 19][n - 1]}px`,
-                                animationDelay: `${n * -0.13}s`,
-                              }}
-                            />
-                          ))}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="master-controls">
-                    <button
-                      className="icon-button"
-                      aria-label={muted ? "Unmute master" : "Mute master"}
-                      onClick={() => setMuted(!muted)}
-                    >
-                      {muted ? <VolumeX size={17} /> : <Volume2 size={17} />}
-                    </button>
-                    <input
-                      aria-label="Master volume"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step=".01"
-                      value={volume}
-                      onChange={(e) => setVolume(+e.target.value)}
-                    />
-                    <button
-                      className="sound-enable"
-                      onClick={() => void enableSound()}
-                    >
-                      {soundOn ? <Check size={13} /> : <Headphones size={13} />}
-                      {soundOn ? "Sound on" : "Enable sound"}
-                    </button>
-                  </div>
-                </section>
-                <p className="sound-status" role="status">
-                  {soundStatus}
-                  {solo
-                    ? ` · ${districtInfo[solo].name} isolated in both worlds`
-                    : ""}
-                </p>
-              </>
             )}
 
             {(room === "memory" || room === "observatory") && (

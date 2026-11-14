@@ -89,12 +89,6 @@ export const locations = {
     symbol: "⌁",
     color: "#70bfff",
   },
-  symphony: {
-    title: "Symphony Chamber",
-    subtitle: "This is what your world sounds like.",
-    symbol: "♫",
-    color: "#a5ecc0",
-  },
   A: {
     title: "Achievement",
     subtitle: "A little higher. A little closer.",
@@ -939,7 +933,6 @@ export default function MindUniverse(props: Props) {
                     "decision",
                     "parallel",
                     "observatory",
-                    "symphony",
                   ] as const
                 ).map((place) => (
                   <button
@@ -965,7 +958,6 @@ export default function MindUniverse(props: Props) {
                           decision: "Decisions",
                           parallel: "Worlds",
                           observatory: "Observe",
-                          symphony: "Symphony",
                         }[place]
                       }
                     </span>

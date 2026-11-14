@@ -53,7 +53,7 @@ import {
   type Line,
   type Speaker,
 } from "./dialogue";
-import { projectScore } from "./audio";
+import { audio, projectScore } from "./audio";
 import VoiceIcon from "./VoiceIcon";
 
 const signed = (n: number, places = 1) =>
@@ -368,19 +368,23 @@ function Introductions({ journey: j, dispatch, advance, onSpeaker }: SceneProps)
   );
 }
 
-function Debate({ journey: j, dispatch, advance, onSpeaker }: SceneProps) {
+function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: SceneProps) {
   const w = j.world, c = w.rules;
   const start = actionState(w.state, c);
   const lines = useMemo(() => debate(start, w.proposals, c), [start, w.proposals, c]);
   const shown = Math.min(j.line, lines.length - 1);
   const current = lines[shown];
   const [asking, setAsking] = useState<District | null>(null);
-  const [asked, setAsked] = useState<{ d: District; q: number } | null>(null);
-  const speaker = asked?.d ?? (current.speaker === "N" ? null : current.speaker);
+  const [asked, setAsked] = useState<{ d: District; q: number; line: number } | null>(null);
+  const speaker = asked?.line === shown ? asked.d : current.speaker === "N" ? null : current.speaker;
   useEffect(() => { onSpeaker(speaker); return () => onSpeaker(null); }, [speaker, onSpeaker]);
+  useEffect(() => {
+    audio.setDebateSpeaker(speaker);
+    return () => audio.setDebateSpeaker(undefined);
+  }, [speaker]);
   const f = forecasts(start, w.proposals, c);
   const done = shown >= lines.length - 1;
-  // Auto-play at reading pace; it stops at the end, on Pause, or while the reader scrolls back.
+  // Auto-play at reading pace; it stops at the end, on Pause, or while a question is open.
   const [auto, setAuto] = useState(true);
   const [pinned, setPinned] = useState(true);
   const box = useRef<HTMLOListElement>(null);
@@ -389,13 +393,13 @@ function Debate({ journey: j, dispatch, advance, onSpeaker }: SceneProps) {
     if (el && pinned) el.scrollTop = el.scrollHeight;
   }, [shown, pinned]);
   useEffect(() => {
-    if (!auto || !pinned || done || asking) return;
+    if (!auto || done || asking) return;
     const words = current.text.split(/\s+/).length;
     const timer = window.setTimeout(() => {
       if (!document.hidden) dispatch({ type: "line", line: shown + 1 });
     }, 1800 + words * 260);
     return () => window.clearTimeout(timer);
-  }, [auto, pinned, done, asking, shown, current.text, dispatch]);
+  }, [auto, done, asking, shown, current.text, dispatch]);
   return (
     <>
       <span className="cosmic-eyebrow">DAY {w.state.day} · THE DEBATE · DECISION CHAMBER</span>
@@ -431,6 +435,7 @@ function Debate({ journey: j, dispatch, advance, onSpeaker }: SceneProps) {
         <PlanChip policy={w.proposals[current.policy]} f={f[current.policy]} rules={c} />
       )}
       <div className="debate-controls">
+        {!soundOn && <button className="text-button" onClick={onSound}>Enable debate sounds</button>}
         <button className="text-button" disabled={done} onClick={() => dispatch({ type: "line", line: lines.length - 1 })}>
           Show full exchange
         </button>
@@ -448,7 +453,7 @@ function Debate({ journey: j, dispatch, advance, onSpeaker }: SceneProps) {
         {asking && (
           <div className="ask-questions">
             {questions.map((q, i) => (
-              <button key={q} className="text-button" onClick={() => setAsked({ d: asking, q: i })}>{q}</button>
+              <button key={q} className="text-button" onClick={() => setAsked({ d: asking, q: i, line: shown })}>{q}</button>
             ))}
           </div>
         )}
@@ -896,7 +901,7 @@ function Summary({ journey: j, onExplore, onObservatory, advance }: SceneProps) 
           </li>
         ))}
       </ol>
-      <p className="stage-note">The world's composition: each day's allocation became the art above and the music in the Symphony Chamber.</p>
+      <p className="stage-note">The world's composition: each day's allocation became the art above.</p>
       <div className="secondary-row">
         <button className="text-button" onClick={onObservatory}>How did this work?</button>
         <button className="text-button" onClick={onExplore}>Explore freely</button>

@@ -1,4 +1,5 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { audio } from "./audio";
 import VoiceIcon from "./VoiceIcon";
 import { districtInfo, type District } from "./simulation";
 import { listScenarios, getScenario, routeThought, evaluateDecision, compareDecisions, reflectOnDecision,
@@ -14,6 +15,7 @@ function demo(id: string): DecisionInput {
 }
 export default function ScenarioCouncil() {
   const [input, setInput] = useState(() => demo("test-and-invitation"));
+  const [debateAudio, setDebateAudio] = useState<Promise<boolean> | null>(null);
   const [thought, setThought] = useState("");
   const [routing, setRouting] = useState<ReturnType<typeof routeThought> | null>(null);
   const [stage, setStage] = useState<"context" | "council" | "reflection">("context");
@@ -27,7 +29,7 @@ export default function ScenarioCouncil() {
   const selectScenario = (id: string) => { setInput(demo(id)); setResult(null); setBaseline(null); setChosen(""); setSaved(""); setError(""); setReflection(""); setStage("context"); };
   const compare = result && baseline ? compareDecisions(baseline, result.input) : null;
   function run() {
-    try { const next = evaluateDecision(input); setResult(next); setBaseline(baseline ?? structuredClone(input)); setError(""); setChosen(""); setStage("council"); }
+    try { const next = evaluateDecision(input); setDebateAudio(audio.enable().catch(() => false)); setResult(next); setBaseline(baseline ?? structuredClone(input)); setError(""); setChosen(""); setStage("council"); }
     catch (e) { setError((e as Error).message); }
   }
   const label = (id: string | null) => scenario.options.find(o => o.id === id)?.label ?? "No single preference";
@@ -52,14 +54,99 @@ export default function ScenarioCouncil() {
       {stage === "council" && result && <>
         {compare && compare.changedFields.length > 0 && <div className="sc-notice" role="status">Compared with your first version: {compare.changedBallots.length ? `${compare.changedBallots.map(p => districtInfo[districts[p]].name).join(", ")} changed their vote.` : "The council's votes stayed the same."} Your original version is preserved.</div>}
         <section className="sc-voices">{result.ballots.map(b => {const d = districts[b.resident]; const opening = result.arguments.find(a => a.id === `opening-${b.resident}`)!; const previous = compare?.before.ballots.find(a => a.resident === b.resident)?.choice; return <article className="sc-voice" key={b.resident} style={{"--voice": districtInfo[d].color} as CSSProperties}><VoiceIcon d={d} size={64}/><h2>{districtInfo[d].name}</h2><span className="sc-vote">{label(b.choice)}</span><p>{opening.text}</p>{b.tiedOptions.length > 1 && <small>Tied: {b.tiedOptions.map(label).join(" · ")}</small>}{previous !== undefined && previous !== b.choice && <small>Previously: {label(previous)}</small>}</article>;})}</section>
-        {result.arguments.some(a => a.replyTo) && <section className="sc-panel"><h2>Around the table</h2>{result.arguments.filter(a => a.replyTo).map(a => <p className="sc-reply" key={a.id}><strong>{districtInfo[districts[a.resident]].name} → {districtInfo[districts[result.arguments.find(b => b.id === a.replyTo)!.resident]].name}</strong>{a.text}</p>)}</section>}
+        <CouncilExchange result={result} autoStart={debateAudio} />
         <section><h2>Your options, side by side</h2><p>Four simulated resident votes. You decide; the majority does not choose for you.</p><div className="sc-options">{result.assessments.map(a => <article className="sc-panel" key={a.optionId}><span className={`sc-status sc-${a.status}`}>{a.status === "feasible" ? "Fits the supplied time" : a.status === "conditional" ? "Needs confirmation" : "Doesn't fit this plan"}</span><h3>{a.label}</h3><p>{result.counts[a.optionId]} / 4 resident votes</p><p>{a.spareMinutes !== null ? `${a.spareMinutes < 0 ? Math.abs(a.spareMinutes) + " minutes over" : a.spareMinutes + " minutes left"} after protected time.` : "Duration needed."}</p>{a.reasons.map(r => <p key={r}>{r}</p>)}<button disabled={a.status !== "feasible"} onClick={() => {setChosen(a.optionId); setSaved(""); setReflection(""); setStage("reflection");}}>Choose this plan</button></article>)}</div><p>{result.abstentions > 0 ? `${result.abstentions} resident(s) abstained because of a tie or no feasible option.` : "All four resident ballots are recorded."}</p></section>
         {result.questions.length > 0 && <div className="sc-notice"><strong>Still worth clarifying</strong>{result.questions.map(q => <p key={q}>{q}</p>)}</div>}
         <button className="sc-primary" onClick={() => setStage("context")}>Change a fact & compare →</button>
         <details className="sc-panel"><summary>How this comparison works</summary>{result.caveats.map(c => <p key={c}>{c}</p>)}</details>
       </>}
-      {stage === "reflection" && result && <section className="sc-panel sc-reflection"><span className="sc-status">YOUR CHOICE</span><h2>{label(chosen)}</h2><p>{scenario.reflection}</p><label htmlFor="sc-reflection">Your reflection</label><textarea id="sc-reflection" maxLength={10000} rows={5} value={reflection} onChange={e => setReflection(e.target.value)} placeholder="What happened? What would you change?"/><button className="sc-primary" disabled={!reflection.trim()} onClick={() => {try {const next = reflectOnDecision(result.input, {chosenOptionId: chosen, observation: reflection}); setSaved(next.explanation); setError("");} catch(e) {setError((e as Error).message);} }}>Record this reflection</button>{saved && <p role="status">{saved}</p>}<small>Kept only in this open session. Refreshing or leaving clears it.</small><div className="sc-row"><button onClick={() => setStage("council")}>Back to council</button><button onClick={() => setStage("context")}>Update facts & reconsider</button></div></section>}
+      {stage === "reflection" && result && <section className="sc-panel sc-reflection"><span className="sc-status">YOUR CHOICE</span><h2>{label(chosen)}</h2><p>{scenario.reflection}</p><label htmlFor="sc-reflection">Your reflection</label><textarea id="sc-reflection" maxLength={10000} rows={5} value={reflection} onChange={e => setReflection(e.target.value)} placeholder="What happened? What would you change?"/><button className="sc-primary" disabled={!reflection.trim()} onClick={() => {try {const next = reflectOnDecision(result.input, {chosenOptionId: chosen, observation: reflection}); setSaved(next.explanation); setError("");} catch(e) {setError((e as Error).message);} }}>Record this reflection</button>{saved && <p role="status">{saved}</p>}<small>Kept only in this open session. Refreshing or leaving clears it.</small><div className="sc-row"><button onClick={() => { setDebateAudio(null); setStage("council"); }}>Back to council</button><button onClick={() => setStage("context")}>Update facts & reconsider</button></div></section>}
       <footer className="sc-footer">A space to explore trade-offs. Not a forecast of your future.</footer>
     </div>
   </main>;
+}
+
+function CouncilExchange({ result, autoStart }: { result: DecisionResult; autoStart: Promise<boolean> | null }) {
+  const replies = result.arguments.filter(argument => argument.replyTo);
+  const [turn, setTurn] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const mounted = useRef(false);
+  const starting = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      audio.play(false);
+      audio.setDebateSpeaker(undefined);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (replies.length) void autoStart?.then(() => {
+      if (cancelled || document.hidden) return;
+      setTurn(0);
+    });
+    return () => { cancelled = true; };
+  }, [autoStart, replies.length]);
+
+  const active = turn === null ? undefined : replies[turn];
+  const last = turn === replies.length - 1;
+  useEffect(() => {
+    if (!active || document.hidden) {
+      audio.play(false);
+      audio.setDebateSpeaker(undefined);
+      return;
+    }
+    audio.setDebateSpeaker(districts[active.resident]);
+    audio.play(true);
+    const timer = window.setTimeout(() => {
+      setTurn(current => last || current === null ? null : current + 1);
+    }, Math.max(1600, active.text.split(/\s+/).length * 240));
+    const stopWhenHidden = () => { if (document.hidden) setTurn(null); };
+    document.addEventListener("visibilitychange", stopWhenHidden);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", stopWhenHidden);
+    };
+  }, [active, last]);
+
+  async function play() {
+    if (starting.current) return;
+    starting.current = true;
+    setError("");
+    try {
+      if (!await audio.enable()) throw new Error("Audio unavailable");
+      if (mounted.current && !document.hidden) {
+        setTurn(0);
+      }
+    } catch {
+      if (mounted.current) setError("Audio couldn’t start. Try Replay exchange again.");
+    } finally {
+      starting.current = false;
+    }
+  }
+
+  if (!replies.length) return null;
+  return (
+    <section className="sc-panel">
+      <h2>Around the table</h2>
+      <button type="button" onClick={active ? () => setTurn(null) : () => void play()}>
+        {active ? "Stop exchange" : "Replay exchange"}
+      </button>
+      {active && <p role="status">Now speaking: {districtInfo[districts[active.resident]].name}</p>}
+      {error && <p role="alert">{error}</p>}
+      {replies.map(reply => {
+        const prior = result.arguments.find(argument => argument.id === reply.replyTo)!;
+        return (
+          <p className="sc-reply" key={reply.id} aria-current={reply === active ? "step" : undefined}
+            style={{ "--voice": districtInfo[districts[reply.resident]].color } as CSSProperties}>
+            <strong>{districtInfo[districts[reply.resident]].name} → {districtInfo[districts[prior.resident]].name}</strong>
+            {reply.text}
+          </p>
+        );
+      })}
+    </section>
+  );
 }

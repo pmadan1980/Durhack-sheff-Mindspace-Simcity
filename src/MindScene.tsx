@@ -13,7 +13,6 @@ import {
 } from "./simulation";
 import { memoriesFor, type Memory } from "./memories";
 import { locations, type Location } from "./MindUniverse";
-import { audio } from "./audio";
 import { planAccent, type Cue } from "./journey";
 import VoiceIcon from "./VoiceIcon";
 import LandingBrain, { glowMap, landingView } from "./LandingBrain";
@@ -27,7 +26,6 @@ const places: Record<Location, Point> = {
   decision: [25, 0, -82],
   parallel: [-30, 0, -110],
   observatory: [29, 1, -110],
-  symphony: [0, 1, -112],
   A: [-10, 0, -47],
   C: [10, 0.4, -47],
   D: [-8, 1, -59],
@@ -39,7 +37,6 @@ const gateways = {
   decision: [16, -3, -66],
   parallel: [-23, -5, -80],
   observatory: [23, -5, -80],
-  symphony: [0, -4, -85],
 } satisfies Partial<Record<Location, Point>>;
 const colors = districts.map((d) => districtInfo[d].color);
 
@@ -855,25 +852,6 @@ function ChamberRoom({
             </mesh>
           )}
         </group>
-      ) : room === "symphony" ? (
-        <group>
-          {districts.map((d, i) => (
-            <group key={d} position={[(i - 1.5) * 1.7, 0, 0]}>
-              <MusicColumn
-                color={colors[i]}
-                index={i}
-                active={sounding && (!solo || solo === d)}
-                reduced={reduced}
-              />
-              <Persona
-                d={d}
-                energy={1}
-                favored={sounding && (!solo || solo === d)}
-                reduced={reduced}
-              />
-            </group>
-          ))}
-        </group>
       ) : (
         <group>
           {Array.from(
@@ -1006,37 +984,6 @@ function ChamberRoom({
         color={color}
       />
     </group>
-  );
-}
-
-function MusicColumn({
-  color,
-  index,
-  active,
-  reduced,
-}: {
-  color: string;
-  index: number;
-  active: boolean;
-  reduced: boolean;
-}) {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame(() => {
-    if (ref.current)
-      ref.current.scale.y =
-        active && !reduced ? 0.3 + audio.level(districts[index]) * 3 : 0.3;
-  });
-  return (
-    <mesh ref={ref} position={[0, 1.5, -1]}>
-      <cylinderGeometry args={[0.2, 0.45, 2, 16]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={color}
-        emissiveIntensity={active ? 0.9 : 0.15}
-        transparent
-        opacity={0.6}
-      />
-    </mesh>
   );
 }
 
@@ -1181,7 +1128,6 @@ export default function MindScene({
                 "decision",
                 "parallel",
                 "observatory",
-                "symphony",
               ] as const
             ).map((place) => (
               <group key={place}>
