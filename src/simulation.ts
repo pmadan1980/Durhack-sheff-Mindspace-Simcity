@@ -4,28 +4,28 @@ export type Allocation = Record<District, number>;
 export const districtInfo = {
   A: {
     name: "Achievement",
-    color: "#f1ac79",
+    color: "#ffd36c",
     symbol: "△",
     voice: "Melody",
     purpose: "Turn time into progress.",
   },
   C: {
     name: "Connection",
-    color: "#e9b9c9",
+    color: "#ff8fab",
     symbol: "◎",
     voice: "Call & response",
     purpose: "Make room for someone.",
   },
   D: {
     name: "Discovery",
-    color: "#b9b2ed",
+    color: "#70e5f4",
     symbol: "✧",
     voice: "Counterline",
     purpose: "Find a different way.",
   },
   R: {
     name: "Recovery",
-    color: "#9ac8b7",
+    color: "#a5ecc0",
     symbol: "≈",
     voice: "Bass & sustain",
     purpose: "Replenish what is shared.",
@@ -88,6 +88,18 @@ export const judgeSetup: Setup = {
   taskProgress: 0,
   energyCap: 12,
 };
+// Literal, disclosed keyword rules for the authored dilemma; not semantic AI interpretation.
+export function setupForThought(text: string, setup: Setup): Setup {
+  const prepared =
+    /\b(almost done|nearly done|head start|already prepared)\b/i.test(text);
+  const tired = /\b(tired|exhausted|burnt out|burned out)\b/i.test(text);
+  return {
+    ...setup,
+    scenarioId: scenarios[prepared ? 1 : 0].id,
+    taskProgress: prepared ? 10 : 0,
+    energy: tired ? Math.min(4, setup.energyCap) : setup.energy,
+  };
+}
 export interface Policy {
   id: string;
   name: string;
