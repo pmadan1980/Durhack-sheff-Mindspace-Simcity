@@ -32,6 +32,7 @@ import {
   validatePolicy,
   type Config,
   type District,
+  replay,
   type Policy,
   type Round,
   type Setup,
@@ -39,82 +40,32 @@ import {
 } from "./simulation";
 import { audio, audioConfig, projectScore } from "./audio";
 import Observatory from "./Observatory";
+import JourneyStage from "./GuidedJourney";
+import {
+  initialJourney,
+  journeyReducer,
+  revealOrder,
+  revealedCounts,
+  roundFor,
+  sceneRoom,
+  type Cue,
+} from "./journey";
 import MindUniverse, { type Location } from "./MindUniverse";
 
-interface Session {
-  state: State;
-  rules: Config;
-  history: Round[];
-  proposals: Policy[];
-  elapsed: number;
-  playing: boolean;
-  speed: number;
-}
-type Action =
-  | { type: "reset"; setup: Setup }
-  | { type: "play" }
-  | { type: "pause" }
-  | { type: "speed"; speed: number }
-  | { type: "tick" }
-  | { type: "step"; day: number }
-  | { type: "edit"; policy: Policy };
-function initialSession(setup: Setup): Session {
-  return {
-    ...createWorld(setup),
-    history: [],
-    proposals: proposalsForDay(1),
-    elapsed: 0,
-    playing: false,
-    speed: 1,
-  };
-}
-function finish(s: Session): Session {
-  if (s.state.day > s.rules.maxDays) return { ...s, playing: false };
-  const round = resolve(s.state, s.proposals, s.rules);
-  return {
-    ...s,
-    state: round.after,
-    history: [...s.history, round].slice(-s.rules.historyLimit),
-    proposals: proposalsForDay(round.after.day),
-    elapsed: 0,
-    playing: s.playing && round.after.day <= s.rules.maxDays,
-  };
-}
-function reducer(s: Session, action: Action): Session {
-  switch (action.type) {
-    case "reset":
-      return initialSession(action.setup);
-    case "play":
-      return { ...s, playing: s.state.day <= s.rules.maxDays };
-    case "pause":
-      return { ...s, playing: false };
-    case "speed":
-      return { ...s, speed: action.speed };
-    case "step":
-      return action.day === s.state.day ? finish({ ...s, playing: false }) : s;
-    case "tick": {
-      if (!s.playing) return s;
-      const next = { ...s, elapsed: s.elapsed + 0.25 * s.speed };
-      return next.elapsed >= s.rules.daySeconds ? finish(next) : next;
-    }
-    case "edit":
-      return !s.playing &&
-        s.elapsed < s.rules.campaignSeconds &&
-        !validatePolicy(action.policy, s.rules)
-        ? {
-            ...s,
-            proposals: s.proposals.map((p) =>
-              p.id === action.policy.id ? structuredClone(action.policy) : p,
-            ),
-          }
-        : s;
-  }
-}
 const note =
   "An interactive fictional model. Change its assumptions and explore what follows.";
 export default function App() {
   const [setup, setSetup] = useState<Setup>({ ...judgeSetup });
-  const [session, dispatch] = useReducer(reducer, judgeSetup, initialSession);
+  const [journey, dispatch] = useReducer(
+    journeyReducer,
+    judgeSetup,
+    initialJourney,
+  );
+  const [thought, setThought] = useState("");
+  const [speaker, setSpeaker] = useState<District | null>(null);
+  const [focus, setFocus] = useState<District | null>(null);
+  const [listening, setListening] = useState(false);
+  const [reactions, setReactions] = useState<Cue["reactions"]>([]);
   const [entered, setEntered] = useState(false);
   const [room, setRoom] = useState<Location>("hub");
   const tab =
@@ -131,13 +82,20 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [solo, setSolo] = useState<District | null>(null);
   const [pair, setPair] = useState<{ a: Round; b: Round } | null>(null);
+  // A guided counterfactual covers the changed day through the last story day in both worlds.
+  const [horizon, setHorizon] = useState<{ day: number; a: Round[]; b: Round[] } | null>(null);
   const [mix, setMix] = useState(0.5);
   const [comparePlaying, setComparePlaying] = useState(true);
   const [hiddenPause, setHiddenPause] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
   const lastStepTime = useRef(0);
+  const session = journey.world;
   const { state, rules: c, history, proposals, elapsed, playing } = session;
+  const scene = journey.scene;
+  const free = scene === "free";
+  const guided = entered && !free && scene !== "thought";
+  const staged = guided && !journey.exploring;
   const last = history.at(-1);
   const selected = history.find((r) => r.before.day === selectedDay) ?? last;
   const prior = history.find(
@@ -154,11 +112,43 @@ export default function App() {
         ? "Voting"
         : "Resolution";
   const ended = state.day > c.maxDays;
+  // Free play: forecast before voting, only the counted prefix while voting, totals after.
+  const counted =
+    phase === "Campaign"
+      ? c.residentCount
+      : phase === "Voting"
+        ? Math.floor(
+            Math.max(0, Math.min(1, (elapsed - c.campaignSeconds) / c.voteSeconds)) *
+              c.residentCount,
+          )
+        : c.residentCount;
+  const shownCounts = proposals.map(
+    (_, i) => election.ballots.slice(0, counted).filter((b) => b.choice === i).length,
+  );
+  const shownLead = shownCounts.indexOf(Math.max(...shownCounts));
 
   useEffect(() => {
+    if (!free) return;
     const timer = setInterval(() => dispatch({ type: "tick" }), 250);
     return () => clearInterval(timer);
-  }, []);
+  }, [free]);
+  // One managed reveal clock: it only runs while counting and is cancelled on any change.
+  const lockedDay = journey.locked?.day;
+  useEffect(() => {
+    if (scene !== "voting" || !journey.counting || lockedDay === undefined)
+      return;
+    const timer = setInterval(
+      () => dispatch({ type: "reveal", day: lockedDay }),
+      (c.guidedCountSeconds * 1000) / c.residentCount,
+    );
+    return () => clearInterval(timer);
+  }, [scene, journey.counting, lockedDay, c]);
+  useEffect(() => {
+    if (entered && !journey.exploring && scene !== "free")
+      setRoom(sceneRoom[scene]);
+    setListening(false);
+    if (scene !== "result") setReactions([]);
+  }, [scene, entered, journey.exploring]);
   useEffect(() => {
     const visibility = () => {
       if (document.hidden) {
@@ -198,9 +188,13 @@ export default function App() {
       entered &&
         soundOn &&
         !hiddenPause &&
-        (tab === "Compare" && pair ? comparePlaying : playing),
+        (tab === "Compare" && pair
+          ? comparePlaying
+          : free
+            ? playing
+            : listening || room === "symphony"),
     );
-  }, [entered, soundOn, hiddenPause, playing, tab, pair, comparePlaying]);
+  }, [entered, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, room]);
   async function enableSound() {
     try {
       const enabled = await audio.enable();
@@ -218,17 +212,68 @@ export default function App() {
       );
     }
   }
-  function reset() {
+  function restart() {
+    setHorizon(null);
     audio.reset();
     dispatch({ type: "reset", setup });
     setPair(null);
     setSelectedDay(null);
     setSolo(null);
     setHiddenPause(false);
+    setRoom("headquarters");
+  }
+  function reset() {
+    audio.reset();
+    dispatch({ type: "reset", setup });
+    dispatch({ type: "free" });
+    setPair(null);
+    setSelectedDay(null);
+    setSolo(null);
+    setHiddenPause(false);
     setRoom("decision");
+  }
+  const locked = journey.locked;
+  const cueRound = locked ? roundFor(history, locked.day) : undefined;
+  const cue: Cue | null = guided
+    ? {
+        scene,
+        speaker,
+        focus,
+        plans: locked?.proposals ?? proposals,
+        votes: locked
+          ? (() => {
+              const v: (number | null)[] = locked.election.ballots.map(() => null);
+              revealOrder(v.length)
+                .slice(0, journey.revealed)
+                .forEach((i) => (v[i] = locked.election.ballots[i].choice));
+              return v;
+            })()
+          : [],
+        counts: locked ? revealedCounts(locked, journey.revealed) : null,
+        winner:
+          locked && journey.revealed >= locked.election.ballots.length
+            ? locked.election.winner
+            : null,
+        flights:
+          cueRound && (scene === "consequences" || scene === "reflection")
+            ? { key: cueRound.id, allocation: cueRound.policy.allocation }
+            : null,
+        thought: scene === "briefing",
+        reactions,
+      }
+    : null;
+  function branchHorizon(day: number, policyId: string) {
+    const r = replay(history, day, policyId, c);
+    audio.reset();
+    setHorizon({ day, ...r });
+    setPair({ a: r.a.at(-1)!, b: r.b.at(-1)! });
+    setMix(0.5);
+    setComparePlaying(true);
+    setRoom("parallel");
   }
   function compare(round = selected) {
     if (!round) return;
+    setHorizon(null);
     dispatch({ type: "pause" });
     audio.reset();
     const alternative = round.policies.find((p) => p.id !== round.policy.id)!;
@@ -279,8 +324,66 @@ export default function App() {
         setEntered(true);
         setHiddenPause(false);
         dispatch({ type: "reset", setup });
+        setRoom("headquarters");
       }}
+      guided={guided}
+      free={free}
+      staged={staged}
+      cue={cue}
+      inProgress={scene !== "thought"}
+      onRelease={(next, text) => {
+        audio.reset();
+        setThought(text);
+        setPair(null);
+        setSelectedDay(null);
+        setSolo(null);
+        setHiddenPause(false);
+        dispatch({ type: "begin", setup: next });
+      }}
+      onFree={() => {
+        audio.reset();
+        dispatch({ type: "reset", setup });
+        dispatch({ type: "free" });
+        setRoom("decision");
+      }}
+      onResume={() => {
+        dispatch({ type: "explore", on: false });
+        setRoom(sceneRoom[scene]);
+      }}
+      stage={
+        staged ? (
+          <JourneyStage
+            journey={journey}
+            dispatch={dispatch}
+            thought={thought}
+            soundOn={soundOn && !muted}
+            solo={solo}
+            onSound={() => {
+              setMuted(false);
+              void enableSound().then(() => setListening(true));
+            }}
+            listening={listening}
+            onListen={setListening}
+            onSolo={setSolo}
+            onSpeaker={setSpeaker}
+            onFocus={setFocus}
+            onExplore={() => dispatch({ type: "explore", on: true })}
+            onObservatory={() => {
+              dispatch({ type: "explore", on: true });
+              setSelectedDay(history.at(-1)?.before.day ?? null);
+              setRoom("observatory");
+            }}
+            onRestart={restart}
+            onBranch={branchHorizon}
+            onReact={(list) =>
+              setReactions(list.map((r, i) => ({ ...r, key: performance.now() + i })))
+            }
+          />
+        ) : null
+      }
       onVisit={(next) => {
+        if (guided && !journey.exploring && next !== sceneRoom[scene])
+          dispatch({ type: "explore", on: true });
         if (next === "parallel") {
           navigate("Compare");
           return;
@@ -291,6 +394,7 @@ export default function App() {
       onApply={(next) => {
         audio.reset();
         dispatch({ type: "reset", setup: next });
+        if (free) dispatch({ type: "free" });
         setPair(null);
         setSelectedDay(null);
         setSolo(null);
@@ -345,7 +449,13 @@ export default function App() {
                 </button>
               </div>
             )}
-            {tab === "World" && room === "decision" && (
+            {guided && journey.exploring && room === "decision" && (
+              <section className="panel explore-note">
+                The Decision Chamber is part of your guided journey. Resume the
+                journey to continue today’s election.
+              </section>
+            )}
+            {free && tab === "World" && room === "decision" && (
               <>
                 <div className="world-grid">
                   <aside className="election-panel panel">
@@ -367,11 +477,12 @@ export default function App() {
                         : "24 residents vote for the future they value. The winning budget becomes today’s policy."}
                     </p>
                     <p className="election-note">
-                      Presentation due day 3 · visit closes day 1.
+                      Presentation due day {c.taskDeadlineDay} ·{" "}
+                      {c.connectionLastOpenDay ? `visit closes day ${c.connectionLastOpenDay}.` : "no visit."}
                       <br />
                       {ended
                         ? "Fourteen days complete."
-                        : externalEvent(state.day).detail}
+                        : externalEvent(state.day, c).detail}
                     </p>
                     <button
                       className="text-button"
@@ -398,14 +509,15 @@ export default function App() {
                           key={`${state.day}-${p.id}`}
                           policy={p}
                           index={i}
-                          votes={election.counts[i]}
-                          leading={i === election.winner}
+                          votes={shownCounts[i]}
+                          leading={counted > 0 && i === shownLead}
+                          label={phase === "Campaign" ? "LEADING FORECAST" : phase === "Voting" ? "LEADING COUNT" : "ELECTED"}
                           locked={
                             playing || elapsed >= c.campaignSeconds || ended
                           }
                           rules={c}
                           onSave={(policy) =>
-                            dispatch({ type: "edit", policy })
+                            dispatch({ type: "worldEdit", policy })
                           }
                         />
                       ))}
@@ -414,7 +526,7 @@ export default function App() {
                       className="vote-residents"
                       aria-label={`${c.residentCount} forecast votes`}
                     >
-                      {election.ballots.map((b) => (
+                      {election.ballots.slice(0, counted).map((b) => (
                         <span
                           title={`${b.resident.id}: ${proposals[b.choice].name}`}
                           key={b.resident.id}
@@ -427,7 +539,10 @@ export default function App() {
                           }}
                         />
                       ))}
-                      <span>24 / 24</span>
+                      <span>
+                        {counted} / {c.residentCount}
+                        {phase === "Campaign" ? " forecast" : ""}
+                      </span>
                     </div>
                     <p className="election-note">
                       {phase === "Campaign" ? "Live forecast" : "Locked ballot"}{" "}
@@ -538,7 +653,9 @@ export default function App() {
                 <div className="section-heading">
                   <div>
                     <span className="eyebrow">
-                      PARALLEL WORLDS / ONE ROUND, RECOMPOSED
+                      {horizon
+                        ? `PARALLEL WORLDS / DAYS ${horizon.day}–${pair.a.before.day} REPLAYED`
+                        : "PARALLEL WORLDS / ONE ROUND, RECOMPOSED"}
                     </span>
                     <h1>What if you chose differently?</h1>
                     <p>
@@ -566,14 +683,25 @@ export default function App() {
                         <div>
                           <span className="eyebrow">
                             {label === "A"
-                              ? "THE ELECTED PATH"
-                              : "MANUAL INTERVENTION"}
+                              ? horizon
+                                ? `DAY ${horizon.day} · ELECTED`
+                                : "THE ELECTED PATH"
+                              : horizon
+                                ? `DAY ${horizon.day} · INTERVENTION`
+                                : "MANUAL INTERVENTION"}
                           </span>
-                          <h2>{r.policy.name}</h2>
+                          <h2>
+                            {horizon
+                              ? horizon[label === "A" ? "a" : "b"][0].policy.name
+                              : r.policy.name}
+                          </h2>
                         </div>
                         {label === "A" ? (
                           <span className="tag">
-                            {r.election.counts[r.election.winner]} VOTES
+                            {(horizon ? horizon.a[0] : r).election.counts[
+                              (horizon ? horizon.a[0] : r).election.winner
+                            ]}{" "}
+                            VOTES
                           </span>
                         ) : (
                           <GitBranch size={19} />
@@ -604,6 +732,10 @@ export default function App() {
                             aria-label="Alternative policy"
                             value={pair.b.policy.id}
                             onChange={(e) => {
+                              if (horizon) {
+                                branchHorizon(horizon.day, e.target.value);
+                                return;
+                              }
                               audio.reset();
                               setPair({
                                 ...pair,
@@ -611,10 +743,10 @@ export default function App() {
                               });
                             }}
                           >
-                            {pair.a.policies.map((p) => (
+                            {(horizon ? horizon.a[0] : pair.a).policies.map((p) => (
                               <option value={p.id} key={p.id}>
                                 {p.name}
-                                {p.id === pair.a.policy.id
+                                {p.id === (horizon ? horizon.a[0] : pair.a).policy.id
                                   ? " (same policy)"
                                   : ""}
                               </option>
@@ -720,11 +852,33 @@ export default function App() {
                   })}
                 </div>
                 <p className="comparison-footnote">
-                  {pair.a.policy.id === pair.b.policy.id
-                    ? "Identical-policy comparison: both sets of numbers match."
-                    : `Only the day ${pair.a.before.day} action differs.`}{" "}
-                  Both receive “{pair.a.external.name}”. No later days are
-                  simulated.{" "}
+                  {horizon
+                    ? `Only day ${horizon.day}'s plan was replaced. Days ${horizon.day + 1}–${pair.a.before.day} were replayed in world B with residents voting on the same proposals. Both worlds cover days ${horizon.day}–${pair.a.before.day} (${horizon.a.length} day${horizon.a.length === 1 ? "" : "s"}) and receive the same morning events.`
+                    : `${
+                        pair.a.policy.id === pair.b.policy.id
+                          ? "Identical-policy comparison: both sets of numbers match."
+                          : `Only the day ${pair.a.before.day} action differs.`
+                      } Both receive “${pair.a.external.name}”. No later days are simulated.`}{" "}
+                  {horizon && scene === "comparison" && (
+                    <>
+                      <button
+                        className="text-button"
+                        onClick={() => {
+                          dispatch({ type: "explore", on: true });
+                          setSelectedDay(horizon.day);
+                          setRoom("observatory");
+                        }}
+                      >
+                        How did this work? <ArrowRight size={13} />
+                      </button>{" "}
+                      <button
+                        className="text-button"
+                        onClick={() => dispatch({ type: "advance", from: "comparison" })}
+                      >
+                        Explore freely <ArrowRight size={13} />
+                      </button>{" "}
+                    </>
+                  )}
                   <button
                     className="text-button"
                     onClick={() => navigate("World")}
@@ -974,34 +1128,27 @@ export default function App() {
               </p>
               <ol>
                 <li>
-                  <b>Follow your curiosity.</b> Select an island or destination
-                  to travel there. The dock and Atlas are keyboard-accessible
-                  routes to every room. Return to Hub whenever you like.
+                  <b>Release a thought.</b> Headquarters maps a few disclosed
+                  keywords to the authored presentation-and-visit dilemma,
+                  locally, not with AI. You can edit the assumptions.
                 </li>
                 <li>
-                  <b>Release a thought.</b> Headquarters maps disclosed keywords
-                  to the authored presentation-and-visit dilemma, locally—not
-                  with AI. A new thought starts a fresh world. Starting
-                  assumptions remain editable.
+                  <b>Meet the voices and hear the debate.</b> Achievement,
+                  Connection, Discovery and Recovery argue from the model’s
+                  forecasts. They don’t vote.
                 </li>
                 <li>
-                  <b>Visit the Decision Chamber.</b> Residents choose one of
-                  three six-block budgets. Pause to edit a proposal, or Step day
-                  for an instant result.
+                  <b>Shape the plans.</b> Keep or edit a six-block plan. Then
+                  24 residents vote and you watch the real ballots counted.
                 </li>
                 <li>
-                  <b>Hear the consequences.</b> Enable sound, then play. Click a
-                  district’s musical part to isolate it. Music reflects the most
-                  recently resolved activity; the opening is a quiet starting
-                  motif.
+                  <b>See what changed.</b> The winning plan is resolved once; a
+                  ledger, the world and its music show the consequences.
                 </li>
                 <li>
-                  <b>Try another choice.</b> Select a completed day and branch.
-                  A/B blends sound only. Returning to World A leaves it paused.
-                </li>
-                <li>
-                  <b>Inspect the rules.</b> Observatory shows the selected day’s
-                  actual arithmetic, votes and dependencies.
+                  <b>Three days, then a what-if.</b> Replay from any day with a
+                  different plan, or explore freely. Explore manually pauses
+                  the journey at any time.
                 </li>
               </ol>
               <p className="fiction-note">
@@ -1103,7 +1250,9 @@ function Candidate({
   locked,
   rules,
   onSave,
+  label,
 }: {
+  label: string;
   policy: Policy;
   index: number;
   votes: number;
@@ -1123,7 +1272,7 @@ function Candidate({
         </span>
         <div>
           <h3>{policy.name}</h3>
-          <span>{leading ? "LEADING FORECAST" : policy.description}</span>
+          <span>{leading ? label : policy.description}</span>
         </div>
         <div className="vote-count">
           {votes}

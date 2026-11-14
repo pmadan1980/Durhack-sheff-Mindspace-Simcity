@@ -4,28 +4,28 @@ export type Allocation = Record<District, number>;
 export const districtInfo = {
   A: {
     name: "Achievement",
-    color: "#ffd36c",
+    color: "#ffc531",
     symbol: "△",
     voice: "Melody",
     purpose: "Turn time into progress.",
   },
   C: {
     name: "Connection",
-    color: "#ff8fab",
+    color: "#ff7f8f",
     symbol: "◎",
     voice: "Call & response",
     purpose: "Make room for someone.",
   },
   D: {
     name: "Discovery",
-    color: "#70e5f4",
+    color: "#4a90ff",
     symbol: "✧",
     voice: "Counterline",
     purpose: "Find a different way.",
   },
   R: {
     name: "Recovery",
-    color: "#a5ecc0",
+    color: "#5fe3b4",
     symbol: "≈",
     voice: "Bass & sustain",
     purpose: "Replenish what is shared.",
@@ -44,6 +44,7 @@ export const config = {
   campaignSeconds: 18,
   voteSeconds: 4,
   resolutionSeconds: 8,
+  guidedCountSeconds: 10,
   daySeconds: 30,
   speedOptions: [0.5, 1, 2],
   maxDays: 14,
@@ -65,7 +66,12 @@ export interface Setup {
   energy: number;
   taskProgress: number;
   energyCap: number;
+  /** Confirmed in the clarification step: the presentation is due at the end of this day. */
+  taskDeadlineDay: number;
+  /** Last day a competing visit is possible; 0 means there is no visit. */
+  visitLastDay: number;
 }
+export const maxDeadlineDay = 5;
 export const scenarios = [
   {
     id: "presentation-and-friend",
@@ -87,12 +93,19 @@ export const judgeSetup: Setup = {
   energy: 8,
   taskProgress: 0,
   energyCap: 12,
+  taskDeadlineDay: config.taskDeadlineDay,
+  visitLastDay: config.connectionLastOpenDay,
 };
 // Literal, disclosed keyword rules for the authored dilemma; not semantic AI interpretation.
+export function thoughtSignals(text: string) {
+  return {
+    prepared: /\b(almost done|nearly done|head start|already prepared)\b/i.test(text),
+    tired: /\b(tired|exhausted|burnt out|burned out)\b/i.test(text),
+    visit: /\b(friend|friends|visit|visiting|visitor|guest)\b/i.test(text),
+  };
+}
 export function setupForThought(text: string, setup: Setup): Setup {
-  const prepared =
-    /\b(almost done|nearly done|head start|already prepared)\b/i.test(text);
-  const tired = /\b(tired|exhausted|burnt out|burned out)\b/i.test(text);
+  const { prepared, tired } = thoughtSignals(text);
   return {
     ...setup,
     scenarioId: scenarios[prepared ? 1 : 0].id,
@@ -179,6 +192,18 @@ export function validateSetup(s: Setup): string | null {
     s.taskProgress > 30
   )
     return "Starting progress must be between 0 and 30.";
+  if (
+    !Number.isInteger(s.taskDeadlineDay) ||
+    s.taskDeadlineDay < 1 ||
+    s.taskDeadlineDay > maxDeadlineDay
+  )
+    return `The deadline must be a day from 1 to ${maxDeadlineDay}.`;
+  if (
+    !Number.isInteger(s.visitLastDay) ||
+    s.visitLastDay < 0 ||
+    s.visitLastDay > s.taskDeadlineDay
+  )
+    return "The visit must end on or before the deadline day.";
   return null;
 }
 export function validatePolicy(p: Policy, c: Config): string | null {
@@ -193,7 +218,13 @@ export function createWorld(setup: Setup): { state: State; rules: Config } {
   const error = validateSetup(setup);
   if (error) throw new Error(error);
   return {
-    rules: { ...config, energyCap: setup.energyCap },
+    rules: {
+      ...config,
+      energyCap: setup.energyCap,
+      taskDeadlineDay: setup.taskDeadlineDay,
+      connectionLastOpenDay: setup.visitLastDay,
+      connectionGoal: setup.visitLastDay > 0 ? config.connectionGoal : 0,
+    },
     state: {
       id: "world-a",
       day: 1,
@@ -208,7 +239,14 @@ export function createWorld(setup: Setup): { state: State; rules: Config } {
 }
 const clamp = (x: number, min: number, max: number) =>
   Math.max(min, Math.min(max, x));
-export function externalEvent(day: number) {
+export function externalEvent(day: number, c: Config = config) {
+  if (day === c.taskDeadlineDay && day > 1)
+    return {
+      id: "the-final-stretch",
+      name: "The final stretch",
+      detail: "Last-minute logistics use 1 energy token before the election.",
+      energy: -1,
+    };
   if (day === 2)
     return {
       id: "a-quiet-morning",
@@ -217,19 +255,18 @@ export function externalEvent(day: number) {
         "An unexpected free moment adds 1 energy token before the election.",
       energy: 1,
     };
-  if (day === 3)
-    return {
-      id: "the-final-stretch",
-      name: "The final stretch",
-      detail: "Last-minute logistics use 1 energy token before the election.",
-      energy: -1,
-    };
+  const visit =
+    c.connectionLastOpenDay < 1
+      ? ""
+      : c.connectionLastOpenDay === 1
+        ? "The visit is available today only. "
+        : `The visit is available until the end of day ${c.connectionLastOpenDay}. `;
   return {
     id: `ordinary-${day}`,
-    name: day === 1 ? "A friend arrives" : "An open day",
+    name: day === 1 ? (visit ? "A friend arrives" : "Day one") : "An open day",
     detail:
       day === 1
-        ? "The visit is available today only. The presentation is due at the end of day 3."
+        ? `${visit}The presentation is due at the end of day ${c.taskDeadlineDay}.`
         : "No external resource changes today.",
     energy: 0,
   };
@@ -238,17 +275,24 @@ export function actionState(state: State, c: Config): State {
   return {
     ...state,
     energy: clamp(
-      state.energy + externalEvent(state.day).energy,
+      state.energy + externalEvent(state.day, c).energy,
       0,
       c.energyCap,
     ),
   };
 }
-export function proposalsForDay(day: number, source = policies): Policy[] {
-  return source.map((p) => ({
+export function proposalsForDay(
+  day: number,
+  source = policies,
+  c: Config = config,
+): Policy[] {
+  // Without any visit, the authored visit plan is not offered at all.
+  return source
+    .filter((p) => c.connectionLastOpenDay > 0 || p.id !== "visit")
+    .map((p) => ({
     ...p,
     allocation:
-      day > config.connectionLastOpenDay
+      day > c.connectionLastOpenDay
         ? { ...p.allocation, A: p.allocation.A + p.allocation.C, C: 0 }
         : { ...p.allocation },
   }));
@@ -398,7 +442,7 @@ export function resolve(
     election,
     policy,
     activity,
-    external: externalEvent(state.day),
+    external: externalEvent(state.day, c),
     manual: intervention !== undefined,
     events: [
       {
@@ -443,6 +487,25 @@ export function branch(round: Round, policyId: string, c: Config): Round {
   );
   result.after.id = "world-b";
   return result;
+}
+// A counterfactual horizon: force one recorded day's policy, then let residents
+// vote normally on the same recorded proposals for every later baseline day.
+export function replay(
+  history: Round[],
+  day: number,
+  policyId: string,
+  c: Config,
+  lastDay = c.taskDeadlineDay,
+): { a: Round[]; b: Round[] } {
+  const a = history.filter(
+    (r) => r.before.day >= day && r.before.day <= lastDay,
+  );
+  if (!a.length || a[0].before.day !== day)
+    throw new Error("Choose a completed day to change.");
+  const b = [branch(a[0], policyId, c)];
+  for (const r of a.slice(1))
+    b.push(resolve(structuredClone(b.at(-1)!.after), r.policies, c));
+  return { a: structuredClone(a), b };
 }
 export const fmt = (n: number, places = 1) =>
   Number(n.toFixed(places)).toLocaleString("en-GB", {
