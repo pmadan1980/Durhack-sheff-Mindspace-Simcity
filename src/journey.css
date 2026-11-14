@@ -1492,3 +1492,17 @@
 .transcript-box {
   max-height: clamp(140px, calc(100vh - 600px), 280px);
 }
+/* Keep wide tables inside the story panel on Windows scrollbars. */
+.journey-stage {
+  overflow-x: hidden;
+}
+.journey-stage .ledger {
+  table-layout: fixed;
+}
+.journey-stage .layer-table th:first-child {
+  width: 44%;
+}
+.journey-stage .ledger td,
+.journey-stage .ledger th {
+  overflow-wrap: anywhere;
+}
