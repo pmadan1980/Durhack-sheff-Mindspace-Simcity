@@ -1,3 +1,4 @@
+import { taskText } from "./simulation";
 import { useEffect, useId, useState } from "react";
 import {
   config,
@@ -57,20 +58,22 @@ function thoughts(state: State, c: Config): Record<District, [string, string]> {
     A:
       state.taskResult !== null
         ? [
-            state.taskResult ? "We made the deadline!" : "We missed day three.",
+            state.taskResult ? "We made the deadline!" : `We missed the day-${c.taskDeadlineDay} deadline.`,
             "Every choice left a trace.",
           ]
         : state.taskProgress >= c.taskGoal
-          ? ["The presentation is ready!", "What matters next?"]
+          ? [taskText(c, "The presentation is ready!"), "What matters next?"]
           : [
-              "The presentation is due.",
+              taskText(c, "The presentation is due."),
               `Day ${c.taskDeadlineDay} · ${fmt(state.taskProgress)}/${c.taskGoal} ready`,
             ],
     C:
-      state.day <= c.connectionLastOpenDay
-        ? ["She’s only here today.", "Can we make room for her?"]
+      c.connectionLastOpenDay === 0
+        ? ["No visit competing today.", "We can focus on your task."]
+        : state.day <= c.connectionLastOpenDay
+        ? [`The visit is possible until day ${c.connectionLastOpenDay}.`, "Can we make room for your friend?"]
         : state.connectionResult
-          ? ["We made time for her.", "That one stays with us."]
+          ? ["We made time for your friend.", "That one stays with us."]
           : ["The visit window closed.", "I wish we’d had more time."],
     D:
       state.method > 1
@@ -186,7 +189,7 @@ export default function WorldArt({
         className="world-art"
         viewBox={compact ? "0 35 1000 535" : "0 0 1000 620"}
         role="group"
-        aria-label={`MINDSPACE headquarters. ${fmt(state.energy)} energy, ${fmt(state.taskProgress)} presentation points, ${fmt(state.method, 2)}× method.`}
+        aria-label={taskText(rules, `MINDSPACE headquarters. ${fmt(state.energy)} energy, ${fmt(state.taskProgress)} presentation points, ${fmt(state.method, 2)}× method.`)}
       >
         <defs>
           <radialGradient id={`${uid}-room`} cx="50%" cy="33%" r="70%">
@@ -912,7 +915,7 @@ export default function WorldArt({
               {districtInfo[d].name}
               <small>
                 {d === "A"
-                  ? `${fmt(state.taskProgress)} presentation`
+                  ? taskText(rules, `${fmt(state.taskProgress)} presentation`)
                   : d === "C"
                     ? `${fmt(state.connectionProgress)} visit`
                     : d === "D"

@@ -1504,5 +1504,9 @@
 }
 .journey-stage .ledger td,
 .journey-stage .ledger th {
+  white-space: normal;
   overflow-wrap: anywhere;
+}
+.mind-universe .orb-label {
+  transform: translateY(-50%);
 }

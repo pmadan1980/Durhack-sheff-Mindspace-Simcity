@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import ScenarioCouncil from "./ScenarioCouncil";
 import "./styles.css";
+import "./parallel.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

@@ -1,5 +1,6 @@
 import {
   actionState,
+  isWorldComplete,
   createWorld,
   districts,
   elect,
@@ -145,7 +146,7 @@ function commit(j: Journey): World {
   };
 }
 function finishFree(w: World): World {
-  if (w.state.day > w.rules.maxDays) return { ...w, playing: false };
+  if (isWorldComplete(w.state, w.rules)) return { ...w, playing: false };
   const round = resolve(w.state, w.proposals, w.rules);
   return {
     ...w,
@@ -153,7 +154,7 @@ function finishFree(w: World): World {
     history: [...w.history, round].slice(-w.rules.historyLimit),
     proposals: proposalsForDay(round.after.day, undefined, w.rules),
     elapsed: 0,
-    playing: w.playing && round.after.day <= w.rules.maxDays,
+    playing: w.playing && !isWorldComplete(round.after, w.rules),
   };
 }
 
@@ -231,9 +232,11 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
     case "advance": {
       if (a.from !== j.scene) return j; // stale or repeated click
       const day = w.state.day;
+      if (["clarify", "briefing", "introductions", "debate", "intervention"].includes(j.scene) &&
+          isWorldComplete(w.state, w.rules)) return { ...j, scene: "summary" };
       switch (j.scene) {
         case "clarify":
-          return { ...j, scene: "briefing" };
+          return { ...j, scene: isWorldComplete(w.state, w.rules) ? "summary" : "briefing" };
         case "briefing":
           return {
             ...j,
@@ -271,7 +274,7 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
         case "consequences":
           return { ...j, scene: "reflection" };
         case "reflection":
-          return day > lastGuidedDay(w.rules)
+          return isWorldComplete(w.state, w.rules)
             ? { ...j, scene: "summary" }
             : {
                 ...j,
@@ -282,7 +285,7 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
                 line: 0,
               };
         case "summary":
-          return { ...j, scene: "branch" };
+          return w.history.length ? { ...j, scene: "branch" } : j;
         case "branch":
           return { ...j, scene: "comparison" };
         case "comparison":
@@ -298,7 +301,7 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
     // Free exploration keeps the original playback clock, and only there.
     case "play":
       return j.scene === "free"
-        ? { ...j, world: { ...w, playing: w.state.day <= w.rules.maxDays } }
+        ? { ...j, world: { ...w, playing: !isWorldComplete(w.state, w.rules) } }
         : j;
     case "pause":
       return { ...j, world: { ...w, playing: false }, counting: false };

@@ -1,3 +1,4 @@
+import { taskText } from "./simulation";
 import { useState } from "react";
 import { ArrowUpRight, Info } from "lucide-react";
 import {
@@ -63,7 +64,7 @@ export default function Observatory({
             <>
               <div className="outcome-number">
                 +{fmt(round.activity.taskGain, 3)}
-                <span>presentation points</span>
+                <span>{taskText(c, "presentation points")}</span>
               </div>
               <p className="note">
                 External event: {round.external.name}. Energy before event{" "}
@@ -81,7 +82,7 @@ export default function Observatory({
                 </code>
               </div>
               <div className="equation">
-                <small>REALISED PRESENTATION GAIN</small>
+                <small>{taskText(c, "REALISED PRESENTATION GAIN")}</small>
                 <code>
                   {c.achievementRate} × {round.policy.allocation.A} blocks ×{" "}
                   {fmt(round.activity.energyFactor, 4)} ×{" "}
@@ -144,8 +145,7 @@ export default function Observatory({
           />
           <div className="graph-legend">
             <span>
-              <i style={{ background: districtInfo.A.color }} />
-              Presentation / {c.taskGoal}
+              <i style={{ background: districtInfo.A.color }} />{taskText(c, " Presentation / ")}{c.taskGoal}
             </span>
             <span>
               <i style={{ background: districtInfo.R.color }} />
@@ -337,7 +337,7 @@ function HistoryGraph({
       className="history-graph"
       viewBox="0 0 490 210"
       role="img"
-      aria-label={`History of presentation, visit and energy over ${history.length} completed days`}
+      aria-label={taskText(c, `History of presentation, visit and energy over ${history.length} completed days`)}
     >
       {[0, 0.5, 1].map((n) => (
         <g key={n}>

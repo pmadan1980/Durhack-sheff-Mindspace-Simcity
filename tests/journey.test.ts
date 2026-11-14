@@ -94,6 +94,24 @@ function playStory(setup: typeof judgeSetup) {
 }
 
 describe("clarified assumptions", () => {
+  it("ends a nearly finished story on day 1 and blocks free-play advancement", () => {
+    const j = playStory({ ...judgeSetup, taskProgress: 10 });
+    expect(j.scene).toBe("summary");
+    expect(j.world.history).toHaveLength(1);
+    expect(j.world.state.taskProgress).toBe(12);
+    expect(j.world.state.taskResult).toBe(true);
+    const free = reduce(j, { type: "free" });
+    const later = run(free, { type: "play" }, { type: "tick" }, { type: "step", day: free.world.state.day });
+    expect(later.world.state).toEqual(free.world.state);
+    expect(later.world.history).toEqual(free.world.history);
+    expect(later.world.playing).toBe(false);
+  });
+  it("an already complete starting presentation goes straight to summary", () => {
+    const j = playStory({ ...judgeSetup, taskProgress: 12 });
+    expect(j.scene).toBe("summary");
+    expect(j.world.history).toHaveLength(0);
+    expect(j.world.state.taskResult).toBe(true);
+  });
   it("a two-day deadline with no visit ends the story after day 2 and never offers a visit", () => {
     const setup = { ...judgeSetup, taskDeadlineDay: 2, visitLastDay: 0 };
     const start = run(initialJourney(setup), { type: "begin", setup });
@@ -109,17 +127,17 @@ describe("clarified assumptions", () => {
     expect(j.world.history[1].external.id).toBe("the-final-stretch");
     expect(replay(j.world.history, 1, "method", j.world.rules).b).toHaveLength(2);
   });
-  it("a four-day deadline with a two-day visit keeps visit plans until day 2 and runs four days", () => {
+  it("a four-day deadline with a two-day visit stops early when the presentation finishes", () => {
     const setup = { ...judgeSetup, taskDeadlineDay: 4, visitLastDay: 2 };
     const j = playStory(setup);
     const h = j.world.history;
-    expect(h.map((r) => r.before.day)).toEqual([1, 2, 3, 4]);
+    expect(h.map((r) => r.before.day)).toEqual([1, 2, 3]);
     expect(h[1].policies.some((p) => p.allocation.C > 0)).toBe(true);
     expect(h[2].policies.every((p) => p.allocation.C === 0)).toBe(true);
     expect(h[0].after.connectionResult).toBeNull();
     expect(h[1].after.connectionResult).not.toBeNull();
-    expect(h[2].after.taskResult).toBeNull();
-    expect(h[3].after.taskResult).not.toBeNull();
+    expect(h[2].after.taskResult).toBe(true);
+    expect(h[2].after.taskProgress).toBe(12);
   });
   it("confirmed answers can change before day 1 starts, and invalid answers are refused", () => {
     let j = run(initialJourney(judgeSetup), { type: "begin", setup: judgeSetup });
@@ -142,7 +160,9 @@ describe("counterfactual replay", () => {
     expect(same.b.at(-1)!.after.taskProgress).toBeCloseTo(same.a.at(-1)!.after.taskProgress);
     const other = h[0].policies.find((p) => p.id !== h[0].policy.id)!;
     const alt = replay(h, 1, other.id, j.world.rules);
-    expect(alt.b.map((r) => r.before.day)).toEqual([1, 2, 3]);
+    expect(alt.b.map((r) => r.before.day)).toEqual([1, 2]);
+    expect(alt.a.map((r) => r.before.day)).toEqual([1, 2]);
+    expect(alt.b.at(-1)!.after.taskResult).toBe(true);
     expect(alt.b[0].policy.id).toBe(other.id);
   });
 });

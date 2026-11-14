@@ -1,3 +1,4 @@
+import { taskText } from "./simulation";
 import {
   Component,
   Suspense,
@@ -23,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  isWorldComplete,
   districtInfo,
   districts,
   fmt,
@@ -407,8 +409,7 @@ export default function MindUniverse(props: Props) {
                   them.
                 </p>
                 <div className="entrance-dilemma">
-                  <span>AN EXAMPLE DILEMMA</span>
-                  Your presentation is due in {rules.taskDeadlineDay} days.
+                  <span>AN EXAMPLE DILEMMA</span>{taskText(rules, " Your presentation is due in ")}{rules.taskDeadlineDay} days.
                   Your friend is only here today.
                 </div>
                 <button className="enter-mind" onClick={props.onEnter}>
@@ -533,7 +534,7 @@ export default function MindUniverse(props: Props) {
                       maxLength={400}
                       value={thought}
                       onChange={(e) => setThought(e.target.value)}
-                      placeholder="My presentation is in three days, but my friend is only here today…"
+                      placeholder={taskText(rules, "My presentation is in three days, but my friend is only here today…")}
                       required
                     />
                     <div className="thought-prompts">
@@ -541,7 +542,7 @@ export default function MindUniverse(props: Props) {
                         type="button"
                         onClick={() => {
                           setThought(
-                            "My presentation is due, but my friend is visiting.",
+                            taskText(rules, "My presentation is due, but my friend is visiting."),
                           );
                           onSetup({ ...judgeSetup });
                         }}
@@ -552,7 +553,7 @@ export default function MindUniverse(props: Props) {
                         type="button"
                         onClick={() =>
                           setThought(
-                            "I’m exhausted, but my presentation is almost done.",
+                            taskText(rules, "I’m exhausted, but my presentation is almost done."),
                           )
                         }
                       >
@@ -625,7 +626,7 @@ export default function MindUniverse(props: Props) {
                             aria-label="Starting task progress"
                             type="number"
                             min="0"
-                            max="30"
+                            max={rules.taskGoal}
                             value={setup.taskProgress}
                             onChange={(e) =>
                               onSetup({
@@ -738,7 +739,7 @@ export default function MindUniverse(props: Props) {
                     </strong>
                     <span>
                       {district === "A"
-                        ? `of ${rules.taskGoal} presentation points`
+                        ? taskText(rules, `of ${rules.taskGoal} presentation points`)
                         : district === "C"
                           ? `of ${rules.connectionGoal} visit points`
                           : district === "D"
@@ -876,9 +877,9 @@ export default function MindUniverse(props: Props) {
                   {String(
                     props.frozen && pair
                       ? pair.a.before.day
-                      : Math.min(state.day, rules.maxDays),
+                      : Math.min(isWorldComplete(state, rules) ? (history.at(-1)?.before.day ?? state.day) : state.day, rules.taskDeadlineDay),
                   ).padStart(2, "0")}{" "}
-                  <small>/ {rules.maxDays}</small>
+                  <small>/ {rules.taskDeadlineDay}</small>
                 </span>
                 <button
                   aria-label={
@@ -890,7 +891,7 @@ export default function MindUniverse(props: Props) {
                         ? "Pause world"
                         : "Play world"
                   }
-                  disabled={!props.frozen && state.day > rules.maxDays}
+                  disabled={!props.frozen && isWorldComplete(state, rules)}
                   onClick={props.onPlay}
                 >
                   {props.playing ? <Pause size={15} /> : <Play size={15} />}
@@ -902,7 +903,7 @@ export default function MindUniverse(props: Props) {
                       ? "Frozen comparison. Return to Decisions to step the live world."
                       : "Step one day"
                   }
-                  disabled={props.frozen || state.day > rules.maxDays}
+                  disabled={props.frozen || isWorldComplete(state, rules)}
                   onClick={props.onStep}
                 >
                   <SkipForward size={15} />

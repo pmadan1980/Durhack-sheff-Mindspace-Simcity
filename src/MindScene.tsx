@@ -709,8 +709,7 @@ function MemoryOrb({
       </mesh>
       <Glow color={color} size={1.8} />
       <Html
-        center
-        position={[0, -0.6, 0]}
+        position={[0.5, 0.3, 0]}
         distanceFactor={18}
         zIndexRange={[20, 0]}
       >

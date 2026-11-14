@@ -31,7 +31,21 @@ export const districtInfo = {
     purpose: "Replenish what is shared.",
   },
 };
+export const taskTypes = ["presentation", "assignment", "report", "project", "exam preparation", "revision", "task"] as const;
+export type TaskType = typeof taskTypes[number];
+export function inferTaskType(text: string): TaskType {
+  const match = text.match(/\b(presentation|assignment|essay|report|project|exam|revision)\b/i)?.[1].toLowerCase();
+  return match === "essay" ? "assignment" : match === "exam" ? "exam preparation" : (match as TaskType | undefined) ?? "task";
+}
+/** Use the confirmed task identity everywhere, preserving sentence/title casing. */
+export function taskText(c: { taskType: TaskType }, text: string): string {
+  return text.replace(/\bpresentation\b/gi, (word) =>
+    word === word.toUpperCase() ? c.taskType.toUpperCase() :
+    word[0] === word[0].toUpperCase() ? c.taskType[0].toUpperCase() + c.taskType.slice(1) : c.taskType);
+}
+
 export const config = {
+  taskType: "presentation" as TaskType,
   modelVersion: "mindspace-v1",
   dailyBudget: 6,
   energyCap: 12,
@@ -62,6 +76,7 @@ export const config = {
 };
 export type Config = typeof config;
 export interface Setup {
+  taskType: TaskType;
   scenarioId: string;
   energy: number;
   taskProgress: number;
@@ -75,20 +90,21 @@ export const maxDeadlineDay = 5;
 export const scenarios = [
   {
     id: "presentation-and-friend",
-    label: "The presentation & the visit",
+    label: "A task & a visit",
     taskProgress: 0,
     summary:
-      "Your presentation is in three days. A friend is in town for just one. How will your world make room for both?",
+      "Your task is due in three days. A friend is in town for just one. How will your world make room for both?",
   },
   {
     id: "almost-prepared",
     label: "A little head start",
     taskProgress: 10,
     summary:
-      "The same three-day deadline. The same one-day visit. But this time, most of your presentation is already done.",
+      "The same deadline and visit, with most of your task already done.",
   },
 ];
 export const judgeSetup: Setup = {
+  taskType: "presentation",
   scenarioId: scenarios[0].id,
   energy: 8,
   taskProgress: 0,
@@ -108,6 +124,7 @@ export function setupForThought(text: string, setup: Setup): Setup {
   const { prepared, tired } = thoughtSignals(text);
   return {
     ...setup,
+    taskType: inferTaskType(text),
     scenarioId: scenarios[prepared ? 1 : 0].id,
     taskProgress: prepared ? 10 : 0,
     energy: tired ? Math.min(4, setup.energyCap) : setup.energy,
@@ -123,7 +140,7 @@ export const policies: Policy[] = [
   {
     id: "prepare",
     name: "Prepare now",
-    description: "Give the presentation a head start.",
+    description: "Give your task a head start.",
     allocation: { A: 4, C: 0, D: 0, R: 2 },
   },
   {
@@ -180,6 +197,7 @@ export function residents(c: Config): Resident[] {
   }));
 }
 export function validateSetup(s: Setup): string | null {
+  if (!taskTypes.includes(s.taskType)) return "Choose a supported task type.";
   if (!scenarios.some((x) => x.id === s.scenarioId))
     return "Choose an authored scenario.";
   if (!Number.isFinite(s.energyCap) || s.energyCap <= 0 || s.energyCap > 30)
@@ -189,9 +207,9 @@ export function validateSetup(s: Setup): string | null {
   if (
     !Number.isFinite(s.taskProgress) ||
     s.taskProgress < 0 ||
-    s.taskProgress > 30
+    s.taskProgress > config.taskGoal
   )
-    return "Starting progress must be between 0 and 30.";
+    return `Starting progress must be between 0 and ${config.taskGoal}.`;
   if (
     !Number.isInteger(s.taskDeadlineDay) ||
     s.taskDeadlineDay < 1 ||
@@ -220,6 +238,7 @@ export function createWorld(setup: Setup): { state: State; rules: Config } {
   return {
     rules: {
       ...config,
+      taskType: setup.taskType,
       energyCap: setup.energyCap,
       taskDeadlineDay: setup.taskDeadlineDay,
       connectionLastOpenDay: setup.visitLastDay,
@@ -232,7 +251,7 @@ export function createWorld(setup: Setup): { state: State; rules: Config } {
       taskProgress: setup.taskProgress,
       connectionProgress: 0,
       method: 1,
-      taskResult: null,
+      taskResult: setup.taskProgress >= config.taskGoal ? true : null,
       connectionResult: null,
     },
   };
@@ -266,7 +285,7 @@ export function externalEvent(day: number, c: Config = config) {
     name: day === 1 ? (visit ? "A friend arrives" : "Day one") : "An open day",
     detail:
       day === 1
-        ? `${visit}The presentation is due at the end of day ${c.taskDeadlineDay}.`
+        ? taskText(c, `${visit}The presentation is due at the end of day ${c.taskDeadlineDay}.`)
         : "No external resource changes today.",
     energy: 0,
   };
@@ -297,6 +316,12 @@ export function proposalsForDay(
         : { ...p.allocation },
   }));
 }
+/** Terminal worlds stay inspectable, but cannot start another simulated day. */
+export function isWorldComplete(s: State, c: Config): boolean {
+  return s.taskResult !== null || s.taskProgress >= c.taskGoal ||
+    s.day > Math.min(c.taskDeadlineDay, c.maxDays);
+}
+
 export function forecast(s: State, p: Policy, c: Config): Activity {
   const a = p.allocation;
   const energyFactor =
@@ -308,9 +333,14 @@ export function forecast(s: State, p: Policy, c: Config): Activity {
   const delta = c.recoveryRate * a.R - cost;
   return {
     energyFactor,
-    taskGain: c.achievementRate * a.A * energyFactor * s.method,
+    taskGain: Math.min(
+      Math.max(0, c.taskGoal - s.taskProgress),
+      c.achievementRate * a.A * energyFactor * s.method,
+    ),
     connectionGain:
-      s.day <= c.connectionLastOpenDay ? c.connectionRate * a.C : 0,
+      s.day <= c.connectionLastOpenDay
+        ? Math.min(Math.max(0, c.connectionGoal - s.connectionProgress), c.connectionRate * a.C)
+        : 0,
     energyDelta: clamp(s.energy + delta, 0, c.energyCap) - s.energy,
     // Audible/visual replenishment is the contribution that survives the cap.
     restored:
@@ -406,6 +436,8 @@ export function resolve(
 ): Round {
   if (state.day > c.maxDays)
     throw new Error("This world has reached its last day.");
+  if (isWorldComplete(state, c))
+    throw new Error("This scenario is complete; start a new thought to play again.");
   const start = actionState(state, c);
   const election = elect(start, ps, c);
   const policy = intervention
@@ -418,14 +450,14 @@ export function resolve(
     ...start,
     day: start.day + 1,
     energy: start.energy + activity.energyDelta,
-    taskProgress: start.taskProgress + activity.taskGain,
-    connectionProgress: start.connectionProgress + activity.connectionGain,
+    taskProgress: Math.min(c.taskGoal, start.taskProgress + activity.taskGain),
+    connectionProgress: Math.min(c.connectionGoal, start.connectionProgress + activity.connectionGain),
     method: start.method + activity.methodGain,
     taskResult:
       start.taskResult ??
-      (start.day === c.taskDeadlineDay
-        ? start.taskProgress + activity.taskGain >= c.taskGoal
-        : null),
+      (start.taskProgress + activity.taskGain >= c.taskGoal
+        ? true
+        : start.day >= c.taskDeadlineDay ? false : null),
     connectionResult:
       start.connectionResult ??
       (start.day === c.connectionLastOpenDay
@@ -447,7 +479,7 @@ export function resolve(
     events: [
       {
         id: `${id}-task`,
-        label: "Presentation advanced",
+        label: taskText(c, "Presentation advanced"),
         amount: activity.taskGain,
         unit: "points",
         district: "A",
@@ -503,9 +535,12 @@ export function replay(
   if (!a.length || a[0].before.day !== day)
     throw new Error("Choose a completed day to change.");
   const b = [branch(a[0], policyId, c)];
-  for (const r of a.slice(1))
+  for (const r of a.slice(1)) {
+    if (isWorldComplete(b.at(-1)!.after, c)) break;
     b.push(resolve(structuredClone(b.at(-1)!.after), r.policies, c));
-  return { a: structuredClone(a), b };
+  }
+  // Compare only the shared active horizon; never run a completed branch again.
+  return { a: structuredClone(a.slice(0, b.length)), b };
 }
 export const fmt = (n: number, places = 1) =>
   Number(n.toFixed(places)).toLocaleString("en-GB", {

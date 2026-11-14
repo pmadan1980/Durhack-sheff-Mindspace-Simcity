@@ -1,3 +1,6 @@
+import { worldCaption } from "./parallelStory";
+import ParallelWorlds from "./ParallelWorlds";
+import { taskText } from "./simulation";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch } from "react";
 import {
   ArrowLeft,
@@ -12,7 +15,9 @@ import {
   RotateCcw,
 } from "lucide-react";
 import {
+  taskTypes,
   actionState,
+  isWorldComplete,
   districtInfo,
   districts,
   fmt,
@@ -185,12 +190,13 @@ const visitPhrase = (c: Config) =>
       : `Your friend is here until the end of day ${c.connectionLastOpenDay}.`;
 const deadlinePhrase = (c: Config) =>
   c.taskDeadlineDay === 1
-    ? "Your presentation is due at the end of today."
-    : `Your presentation is due in ${c.taskDeadlineDay} days.`;
+    ? taskText(c, "Your presentation is due at the end of today.")
+    : taskText(c, `Your presentation is due in ${c.taskDeadlineDay} days.`);
 
 /** The single place to confirm or change the authored scenario's assumptions. */
 function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
   const s = j.setup;
+  const c = j.world.rules;
   const from = thoughtSignals(thought);
   const set = (patch: Partial<typeof s>) => {
     const next = { ...s, ...patch };
@@ -208,13 +214,22 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
       <h2 tabIndex={-1}>Let’s get your situation right.</h2>
       {thought && <blockquote className="thought-quote">“{thought}”</blockquote>}
       <p className="stage-lede">
-        MINDSPACE runs one authored model: a presentation deadline, maybe a visit
-        competing for your time, {j.world.rules.dailyBudget} blocks a day and one
-        energy reserve. It only spots a few literal keywords, so please confirm the
-        rest. Change anything that isn’t true.
+        Explore your {s.taskType} deadline, an optional visit competing for your time,
+        {" "}{c.dailyBudget} blocks a day and one energy reserve. We suggest a task type
+        from familiar words; confirm it below. These are shared fictional rules,
+        not a prediction of your real outcome.
       </p>
       <fieldset className="choice-set">
-        <legend>When is the presentation due?</legend>
+        <legend>What are you working on?</legend>
+        <label className="inline-field">
+          Task type
+          <select value={s.taskType} onChange={(e) => set({ taskType: e.target.value as typeof s.taskType })}>
+            {taskTypes.map((type) => <option key={type} value={type}>{type[0].toUpperCase() + type.slice(1)}</option>)}
+          </select>
+        </label>
+      </fieldset>
+      <fieldset className="choice-set">
+        <legend>{taskText(c, "When is the presentation due?")}</legend>
         {tag(false)}
         <div className="chip-row">
           {Array.from({ length: maxDeadlineDay }, (_, i) => i + 1).map((d) => (
@@ -231,9 +246,7 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
           <button aria-pressed={s.visitLastDay > 0} onClick={() => set({ visitLastDay: Math.max(1, s.visitLastDay || 1) })}>
             Yes, a friend’s visit
           </button>
-          <button aria-pressed={s.visitLastDay === 0} onClick={() => set({ visitLastDay: 0 })}>
-            No, just the presentation
-          </button>
+          <button aria-pressed={s.visitLastDay === 0} onClick={() => set({ visitLastDay: 0 })}>{taskText(c, " No, just the presentation ")}</button>
         </div>
         {s.visitLastDay > 0 && (
           <label className="inline-field">
@@ -247,7 +260,7 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
         )}
       </fieldset>
       <fieldset className="choice-set">
-        <legend>How far along is the presentation?</legend>
+        <legend>{taskText(c, "How far along is the presentation?")}</legend>
         {tag(from.prepared, "almost done")}
         <label className="inline-field">
           <input type="range" min={0} max={j.world.rules.taskGoal} step={1} value={Math.min(s.taskProgress, j.world.rules.taskGoal)}
@@ -295,7 +308,7 @@ function Briefing({ journey: j, dispatch, thought, advance }: SceneProps) {
         <article style={{ "--fact": districtInfo.A.color } as CSSProperties}>
           <small>DEADLINE</small>
           <b>{fmt(w.state.taskProgress)} / {c.taskGoal}</b>
-          <span>presentation points, due end of day {c.taskDeadlineDay}{w.state.taskProgress >= c.taskGoal ? " · already complete" : ""}</span>
+          <span>{taskText(c, "presentation points, due end of day ")}{c.taskDeadlineDay}{w.state.taskProgress >= c.taskGoal ? " · already complete" : ""}</span>
         </article>
         <article style={{ "--fact": districtInfo.C.color } as CSSProperties}>
           {hasVisit(c) ? (
@@ -519,7 +532,7 @@ function PlanChip({ policy, f, rules }: { policy: Policy; f: ReturnType<typeof f
 function Forecast({ f, rules: c }: { f: ReturnType<typeof forecasts>[number]; rules: Config }) {
   return (
     <dl className="forecast">
-      <div><dt>Presentation</dt><dd>+{fmt(f.taskGain)} pts</dd></div>
+      <div><dt>{taskText(c, "Presentation")}</dt><dd>+{fmt(f.taskGain)} pts</dd></div>
       <div><dt>Visit</dt><dd>{f.connectionOpen ? `+${fmt(f.connectionGain)} pts` : "closed"}</dd></div>
       <div><dt>Energy</dt><dd>{signed(f.energyDelta)} tokens</dd></div>
       <div><dt>Method</dt><dd>{f.methodGain > 0 ? `${signed(f.methodGain, 2)}× from tomorrow` : "no change"}</dd></div>
@@ -622,8 +635,8 @@ function Intervention({ journey: j, dispatch, advance, onSpeaker, onReact }: Sce
       )}
       <details className="equations">
         <summary>Show the equations</summary>
-        <p>Presentation = {c.achievementRate} × Achievement blocks × energy factor ({fmt(f[0].energyFactor, 3)}) × method ({fmt(start.method, 2)}).</p>
-        <p>Energy factor = {c.energyFactorFloor} + {c.energyFactorRange} × energy / {c.energyCap}. Visit = {c.connectionRate} × Connection blocks while open.</p>
+        <p>{taskText(c, "Presentation gain = ")}{c.achievementRate} × Achievement blocks × energy factor ({fmt(f[0].energyFactor, 3)}) × method ({fmt(start.method, 2)}), capped at the remaining points to {c.taskGoal}.</p>
+        <p>Energy factor = {c.energyFactorFloor} + {c.energyFactorRange} × energy / {c.energyCap}. Visit = {c.connectionRate} × Connection blocks while open, capped at the remaining visit points.</p>
         <p>Energy change = {c.recoveryRate} × Recovery − ({c.achievementEnergyCost}A + {c.connectionEnergyCost}C + {c.discoveryEnergyCost}D), kept between 0 and {c.energyCap}. Method += {c.discoveryMethodGain} × Discovery, from tomorrow, capped at {c.methodCap}×.</p>
       </details>
       <Primary
@@ -757,7 +770,7 @@ function Result({ journey: j, advance, onSpeaker, onReact }: SceneProps) {
         <Tokens policy={w} />
         <p>
           This plan governs today's {c.dailyBudget} blocks: {allocationText(w)}. Forecast:
-          +{fmt(f.taskGain)} presentation, {f.connectionOpen ? `+${fmt(f.connectionGain)} visit, ` : ""}{signed(f.energyDelta)} energy{f.methodGain > 0 ? `, ${signed(f.methodGain, 2)}× method from tomorrow` : ""}.
+          +{fmt(f.taskGain)}{taskText(c, " presentation, ")}{f.connectionOpen ? `+${fmt(f.connectionGain)} visit, ` : ""}{signed(f.energyDelta)} energy{f.methodGain > 0 ? `, ${signed(f.methodGain, 2)}× method from tomorrow` : ""}.
         </p>
         <small>A plan won, not a voice. Every voice still lives with the result.</small>
       </div>
@@ -779,9 +792,9 @@ function Consequences({ journey: j, advance, dispatch, onFocus, soundOn, onSound
   const score = projectScore(r.after, r, prior, c);
   const allRows: { d: District; name: string; before: string; change: string; after: string; why: string }[] = [
     {
-      d: "A", name: "Presentation", before: `${fmt(r.start.taskProgress)}`, change: `+${fmt(r.activity.taskGain)} pts`, after: `${fmt(r.after.taskProgress)} / ${c.taskGoal}`,
+      d: "A", name: taskText(c, "Presentation"), before: `${fmt(r.start.taskProgress)}`, change: `+${fmt(r.activity.taskGain)} pts`, after: `${fmt(r.after.taskProgress)} / ${c.taskGoal}`,
       why: r.after.taskResult !== null
-        ? `Deadline day: the presentation ${r.after.taskResult ? "made" : "missed"} the ${c.taskGoal}-point goal.`
+        ? taskText(c, `The presentation ${r.after.taskResult ? `reached the ${c.taskGoal}-point goal on day ${r.before.day}` : `missed the ${c.taskGoal}-point goal at the deadline`}.`)
         : `${r.policy.allocation.A} Achievement blocks at ${fmt(r.activity.energyFactor, 2)}× energy and ${fmt(r.start.method, 2)}× method. ${fmt(Math.max(0, c.taskGoal - r.after.taskProgress))} points remain before day ${c.taskDeadlineDay} ends.`,
     },
     {
@@ -798,12 +811,12 @@ function Consequences({ journey: j, advance, dispatch, onFocus, soundOn, onSound
     },
     {
       d: "D", name: "Method", before: `${fmt(r.start.method, 2)}×`, change: r.activity.methodGain > 0 ? `${signed(r.activity.methodGain, 2)}×` : "no change", after: `${fmt(r.after.method, 2)}×`,
-      why: r.activity.methodGain > 0 ? `Applies to presentation work from day ${r.before.day + 1}, not retroactively.` : "No Discovery blocks today, so the multiplier holds.",
+      why: r.activity.methodGain > 0 ? taskText(c, `Applies to presentation work from day ${r.before.day + 1}, not retroactively.`) : "No Discovery blocks today, so the multiplier holds.",
     },
   ];
   const rows = allRows.filter((row) => row.d !== "C" || c.connectionLastOpenDay > 0);
   const layers: { d: District; text: string }[] = [
-    { d: "A", text: `Achievement plays the melody: ${score.density.A} note${score.density.A === 1 ? "" : "s"} per bar from today's presentation gain.` },
+    { d: "A", text: taskText(c, `Achievement plays the melody: ${score.density.A} note${score.density.A === 1 ? "" : "s"} per bar from today's presentation gain.`) },
     { d: "C", text: score.density.C ? `Connection adds call and response, from today's visit points.` : c.connectionLastOpenDay ? "Connection is silent: no visit points today." : "Connection is silent: there's no visit in this scenario." },
     { d: "D", text: score.density.D ? `Discovery's counterline plays because the method was above 1× today.` : "Discovery's counterline joins once a method gain is in effect, from the next day." },
     { d: "R", text: score.density.R ? `Recovery contributes the sustained bass, from ${fmt(r.activity.restored)} restored energy.` : "Recovery's bass is quiet: nothing was restored after costs." },
@@ -858,14 +871,14 @@ function Consequences({ journey: j, advance, dispatch, onFocus, soundOn, onSound
 function Reflection({ journey: j, advance }: SceneProps) {
   const c = j.world.rules;
   const r = roundFor(j.world.history, j.locked!.day)!;
-  const last = r.before.day >= lastGuidedDay(c);
-  const story = c.taskDeadlineDay === 1 ? "one-day" : `${c.taskDeadlineDay}-day`;
+  const last = isWorldComplete(r.after, c);
+  const story = r.before.day === 1 ? "one-day" : `${r.before.day}-day`;
   return (
     <>
       <span className="cosmic-eyebrow">DAY {r.before.day} · REFLECTION</span>
       <h2 tabIndex={-1}>Day {r.before.day}, in one breath.</h2>
       <p className="stage-lede">
-        {r.policy.name} won {r.election.counts[r.election.winner]} of {r.election.ballots.length}. The presentation is at {fmt(r.after.taskProgress)} of {c.taskGoal}
+        {r.policy.name} won {r.election.counts[r.election.winner]} of {r.election.ballots.length}{taskText(c, ". The presentation is at ")}{fmt(r.after.taskProgress)} of {c.taskGoal}
         {r.after.taskResult === null ? `, due in ${c.taskDeadlineDay - r.before.day} day${c.taskDeadlineDay - r.before.day === 1 ? "" : "s"}` : r.after.taskResult ? ": goal met" : ": goal missed"}.
         {c.connectionLastOpenDay > 0 ? ` The visit ${r.after.connectionResult === null ? `is at ${fmt(r.after.connectionProgress)} of ${c.connectionGoal}` : r.after.connectionResult ? "goal was met" : "goal was missed"}.` : ""} Energy ends at {fmt(r.after.energy)} of {c.energyCap}; method at {fmt(r.after.method, 2)}×.
       </p>
@@ -878,15 +891,16 @@ function Reflection({ journey: j, advance }: SceneProps) {
 function Summary({ journey: j, onExplore, onObservatory, advance }: SceneProps) {
   const c = j.world.rules;
   const days = j.world.history.filter((r) => r.before.day <= lastGuidedDay(c));
-  const end = days.at(-1)!.after;
+  const end = days.at(-1)?.after ?? j.world.state;
+  const endDay = days.at(-1)?.before.day ?? 0;
   return (
     <>
-      <span className="cosmic-eyebrow">THE {c.taskDeadlineDay === 1 ? "ONE" : c.taskDeadlineDay}-DAY STORY</span>
-      <h2 tabIndex={-1}>{end.taskResult ? "The presentation made it." : "The presentation fell short."}</h2>
+      <span className="cosmic-eyebrow">YOUR COMPLETED STORY</span>
+      <h2 tabIndex={-1}>{end.taskResult ? taskText(c, "The presentation made it.") : taskText(c, "The presentation fell short.")}</h2>
       <ul className="since-list">
-        <li>Presentation: {fmt(end.taskProgress)} of {c.taskGoal} points by the end of day {c.taskDeadlineDay}: {end.taskResult ? "met" : "missed"}.</li>
+        <li>{taskText(c, "Presentation: ")}{fmt(end.taskProgress)} of {c.taskGoal} points{endDay ? ` at the end of day ${endDay}` : " at the start"}: {end.taskResult ? "met" : "missed"}.</li>
         {c.connectionLastOpenDay > 0 && (
-          <li>Visit: {fmt(end.connectionProgress)} of {c.connectionGoal} points before the window closed: {end.connectionResult ? "protected" : "lost"}.</li>
+          <li>Visit: {fmt(end.connectionProgress)} of {c.connectionGoal} points: {end.connectionResult === null ? "window still open when the scenario ended" : end.connectionResult ? "protected" : "lost"}.</li>
         )}
         <li>Energy: ended at {fmt(end.energy)} of {c.energyCap} tokens. Method: {fmt(end.method, 2)}×.</li>
       </ul>
@@ -906,7 +920,7 @@ function Summary({ journey: j, onExplore, onObservatory, advance }: SceneProps) 
         <button className="text-button" onClick={onObservatory}>How did this work?</button>
         <button className="text-button" onClick={onExplore}>Explore freely</button>
       </div>
-      <Primary label="What if another plan had won?" onClick={() => advance("summary")} />
+      <Primary label="What if another plan had won?" disabled={!days.length} onClick={() => advance("summary")} />
     </>
   );
 }
@@ -923,11 +937,7 @@ function Branch({ journey: j, onBranch, advance }: SceneProps) {
     <>
       <span className="cosmic-eyebrow">A COUNTERFACTUAL INTERVENTION</span>
       <h2 tabIndex={-1}>What if another plan had won?</h2>
-      <p className="stage-lede">
-        Pick one completed day and force a different plan. That day replays from its recorded start, with the same morning event.
-        Every later day up to day {lastGuidedDay(c)} is then replayed with residents voting on the same proposals you saw.
-        Your original world is kept unchanged.
-      </p>
+      <p className="stage-lede">{taskText(c, " Pick one completed day and force a different plan. That day replays from its recorded start, with the same morning event. Later recorded days are replayed using the same proposals, stopping when either world completes its presentation or reaches the deadline. Your original world is kept unchanged. ")}</p>
       <fieldset className="choice-set">
         <legend>Day to change</legend>
         {days.map((r) => (
@@ -948,7 +958,7 @@ function Branch({ journey: j, onBranch, advance }: SceneProps) {
         ))}
       </fieldset>
       <p className="stage-note">
-        This compares days {day}–{lastGuidedDay(c)} in both worlds ({lastGuidedDay(c) - day + 1} day{day === lastGuidedDay(c) ? "" : "s"}). It's an intervention, not a new election result.
+        Both worlds are compared through their shared active days, up to day {days.at(-1)!.before.day}. If either finishes earlier, the comparison stops there. It's an intervention, not a new election result.
       </p>
       <Primary
         label="Open Parallel Worlds"
@@ -959,153 +969,51 @@ function Branch({ journey: j, onBranch, advance }: SceneProps) {
   );
 }
 
-const worldStats = (s: State, c: Config) =>
-  [
-    { d: "A" as District, name: "Presentation", v: `${fmt(s.taskProgress)} / ${c.taskGoal}` },
-    { d: "C" as District, name: "Visit", v: `${fmt(s.connectionProgress)} / ${c.connectionGoal}` },
-    { d: "R" as District, name: "Energy", v: `${fmt(s.energy)} / ${c.energyCap}` },
-    { d: "D" as District, name: "Method", v: `${fmt(s.method, 2)}×` },
-  ].filter((x) => x.d !== "C" || c.connectionLastOpenDay > 0);
-
-function SideBySide({ journey: j, horizon, unfold, onUnfold, advance }: SceneProps) {
-  const c = j.world.rules;
+function SideBySide({ journey: j, horizon, unfold, onUnfold, advance, ...props }: SceneProps) {
   if (!horizon) return null;
-  const last = horizon.a.length - 1;
-  const i = Math.min(unfold, last);
-  return (
-    <>
-      <span className="cosmic-eyebrow">PARALLEL WORLDS · SIDE BY SIDE</span>
-      <h2 tabIndex={-1}>World B unfolds next to World A.</h2>
-      <p className="stage-lede">
-        Same start, same morning events. On day {horizon.day}, World B was given <b>{horizon.b[0].policy.name}</b> instead of <b>{horizon.a[0].policy.name}</b>.
-        After that, its residents vote normally on the same proposals.
-      </p>
-      <ol className="unfold">
-        {horizon.a.slice(0, i + 1).map((ra, k) => {
-          const rb = horizon.b[k];
-          return (
-            <li key={ra.id} className={k === i ? "unfold-current" : ""}>
-              <b className="unfold-day">Day {ra.before.day}</b>
-              {[["A", ra], ["B", rb]].map(([label, r]) => {
-                const round = r as Round;
-                return (
-                  <div key={label as string} className={`unfold-world world-${(label as string).toLowerCase()}`}>
-                    <small>WORLD {label as string}{k === 0 && label === "B" ? " · INTERVENTION" : ""}</small>
-                    <span>{round.policy.name}{k > 0 || label === "A" ? ` · ${round.election.counts[round.election.winner]}/${round.election.ballots.length} votes` : ""}</span>
-                    <span className="unfold-stats">
-                      {worldStats(round.after, c).map((x) => (
-                        <em key={x.name}><VoiceIcon d={x.d} size={16} /> {x.name} {x.v}</em>
-                      ))}
-                    </span>
-                  </div>
-                );
-              })}
-            </li>
-          );
-        })}
-      </ol>
-      {i < last ? (
-        <Primary label={`Show day ${horizon.a[i + 1].before.day}`} onClick={() => onUnfold(i + 1)} />
-      ) : (
-        <Primary label="Listen to both worlds" onClick={() => advance("comparison")} />
-      )}
-    </>
-  );
+  const i = Math.min(unfold, horizon.a.length - 1);
+  return <>
+    <span className="cosmic-eyebrow">PARALLEL WORLDS · DAY {horizon.a[i].before.day}</span>
+    <h2 tabIndex={-1}>One decision. Two living futures.</h2>
+    <p className="stage-lede">The same beginning, a different plan. Watch what changes when “{horizon.b[0].policy.name}” replaces “{horizon.a[0].policy.name}”.</p>
+    <ParallelWorlds a={horizon.a[i]} b={horizon.b[i]} rules={j.world.rules} mix={props.mix} onMix={props.onMix} playing={props.loops} onPlaying={props.onLoops} soundOn={props.soundOn} onSound={props.onSound} solo={props.solo} onSolo={props.onSolo} mixer={false} />
+    {i < horizon.a.length - 1
+      ? <Primary label={`Follow the ripples into day ${horizon.a[i + 1].before.day}`} onClick={() => onUnfold(i + 1)} />
+      : <Primary label="Step between the futures" onClick={() => advance("comparison")} />}
+  </>;
 }
 
-function Listen({ journey: j, horizon, mix, onMix, loops, onLoops, soundOn, onSound, solo, onSolo, advance }: SceneProps) {
-  const c = j.world.rules;
+function Listen({ journey: j, horizon, advance, ...props }: SceneProps) {
   if (!horizon) return null;
-  const a = horizon.a.at(-1)!, b = horizon.b.at(-1)!;
-  const sa = projectScore(a.after, a, horizon.a.at(-2), c);
-  const sb = projectScore(b.after, b, horizon.b.at(-2), c);
-  const layers: { d: District; what: string; a: string; b: string }[] = [
-    { d: "A", what: "Melody: more notes for more presentation progress that day", a: `${sa.density.A} notes`, b: `${sb.density.A} notes` },
-    { d: "C", what: "Call and response: visit points that day", a: sa.density.C ? `${sa.density.C} calls` : "silent", b: sb.density.C ? `${sb.density.C} calls` : "silent" },
-    { d: "D", what: "Counterline: plays once a method gain is in effect", a: sa.density.D ? "playing" : "silent", b: sb.density.D ? "playing" : "silent" },
-    { d: "R", what: "Sustained bass: energy actually restored that day", a: sa.density.R ? "sustained" : "quiet", b: sb.density.R ? "sustained" : "quiet" },
-  ];
-  return (
-    <>
-      <span className="cosmic-eyebrow">PARALLEL WORLDS · LISTEN</span>
-      <h2 tabIndex={-1}>Hear both worlds.</h2>
-      <p className="stage-lede">
-        Each world plays its last day (day {a.before.day}) as music. The slider blends the two
-        soundtracks. <b>It blends sound, not outcomes:</b> no number changes.
-      </p>
-      {!soundOn ? (
-        <button className="secondary" onClick={onSound}><Headphones size={14} /> Enable sound</button>
-      ) : (
-        <button className="secondary" onClick={() => onLoops(!loops)}>
-          {loops ? <Pause size={14} /> : <Play size={14} />} {loops ? "Pause both worlds" : "Play both worlds"}
-        </button>
-      )}
-      <div className="mix-control">
-        <button aria-pressed={mix === 0} onClick={() => onMix(0)}>World A only</button>
-        <input type="range" min={0} max={1} step={0.01} value={mix} aria-label="Blend World A and World B" onChange={(e) => onMix(+e.target.value)} />
-        <button aria-pressed={mix === 1} onClick={() => onMix(1)}>World B only</button>
-      </div>
-      <p className="mix-readout">{Math.round((1 - mix) * 100)}% World A · {Math.round(mix * 100)}% World B</p>
-      <table className="ledger layer-table">
-        <thead><tr><th>Layer</th><th>World A</th><th>World B</th><th /></tr></thead>
-        <tbody>
-          {layers.map((l) => (
-            <tr key={l.d} className={solo === l.d ? "ledger-focus" : ""} style={{ "--voice": districtInfo[l.d].color } as CSSProperties}>
-              <th><span className="layer-name"><VoiceIcon d={l.d} size={20} /> {districtInfo[l.d].name}</span><small>{l.what}</small></th>
-              <td>{l.a}</td><td>{l.b}</td>
-              <td><button className="text-button" aria-pressed={solo === l.d} onClick={() => onSolo(solo === l.d ? null : l.d)}>{solo === l.d ? "Unsolo" : "Solo"}</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <Primary label="Reflect on the difference" onClick={() => advance("listen")} />
-    </>
-  );
+  return <>
+    <span className="cosmic-eyebrow">PARALLEL WORLDS · THE COMPOSITION</span>
+    <h2 tabIndex={-1}>Feel the difference.</h2>
+    <p className="stage-lede">Shift your attention between the futures. Their networks and soundtracks respond together.</p>
+    <ParallelWorlds a={horizon.a.at(-1)!} b={horizon.b.at(-1)!} rules={j.world.rules} mix={props.mix} onMix={props.onMix} playing={props.loops} onPlaying={props.onLoops} soundOn={props.soundOn} onSound={props.onSound} solo={props.solo} onSolo={props.onSolo} />
+    <Primary label="Take the story with you" onClick={() => advance("listen")} />
+  </>;
 }
 
 function Closing({ journey: j, horizon, onObservatory, advance }: SceneProps) {
-  const c = j.world.rules;
   if (!horizon) return null;
-  const a = horizon.a.at(-1)!.after, b = horizon.b.at(-1)!.after;
-  const rows = worldStats(a, c).map((x, i) => {
-    const key = (["taskProgress", "connectionProgress", "energy", "method"] as const)[["A", "C", "R", "D"].indexOf(x.d)];
-    return { ...x, va: a[key], vb: b[key], i };
-  });
-  return (
-    <>
-      <span className="cosmic-eyebrow">PARALLEL WORLDS · REFLECT</span>
-      <h2 tabIndex={-1}>One decision, two worlds.</h2>
-      <p className="stage-lede">
-        Changing only day {horizon.day} from {horizon.a[0].policy.name} to {horizon.b[0].policy.name} gives this by the end of day {c.taskDeadlineDay}:
-      </p>
-      <table className="ledger">
-        <thead><tr><th>Resource</th><th>World A</th><th>World B</th><th>B − A</th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.name} style={{ "--voice": districtInfo[r.d].color } as CSSProperties}>
-              <th><span className="layer-name"><VoiceIcon d={r.d} size={18} /> {r.name}</span></th>
-              <td>{fmt(r.va, 2)}</td><td>{fmt(r.vb, 2)}</td>
-              <td>{signed(r.vb - r.va, 2)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <ul className="since-list">
-        <li>Deadline: World A {a.taskResult ? "met" : "missed"} it; World B {b.taskResult ? "met" : "missed"} it.</li>
-        {c.connectionLastOpenDay > 0 && <li>Visit: World A {a.connectionResult ? "protected" : "lost"} it; World B {b.connectionResult ? "protected" : "lost"} it.</li>}
-      </ul>
-      <p className="stage-note">World B is an intervention, not a new election result. Your original world is unchanged.</p>
-      <div className="secondary-row">
-        <button className="text-button" onClick={onObservatory}>How did this work?</button>
-      </div>
-      <Primary label="Explore freely" onClick={() => advance("closing")} />
-    </>
-  );
+  const a = horizon.a.at(-1)!, b = horizon.b.at(-1)!;
+  return <>
+    <span className="cosmic-eyebrow">A COMPOSITION OF CHOICES</span>
+    <h2 tabIndex={-1}>Small choices leave different traces.</h2>
+    <p className="stage-lede">One plan changed on day {horizon.day}. These are both worlds at the end of day {a.before.day}.</p>
+    <div className="future-duet">
+      <article className="future-world"><header><h3>What happened</h3></header><p className="future-caption">{worldCaption(a, j.world.rules)}</p></article>
+      <article className="future-world future-b"><header><h3>Your alternative</h3></header><p className="future-caption">{worldCaption(b, j.world.rules)}</p></article>
+    </div>
+    <p className="stage-note">Neither composition is a prediction. You changed one plan and explored the consequences of the model's rules.</p>
+    <button className="text-button" onClick={onObservatory}>Explore the mathematics behind the art</button>
+    <Primary label="Explore freely" onClick={() => advance("closing")} />
+  </>;
 }
 
 function Ribbon({ state: s, rules: c }: { state: State; rules: Config }) {
   const items = [
-    { d: "A" as District, name: "Presentation", value: `${fmt(s.taskProgress)} / ${c.taskGoal} pts`, note: s.taskResult === null ? `due end of day ${c.taskDeadlineDay}` : s.taskResult ? "met" : "missed" },
+    { d: "A" as District, name: taskText(c, "Presentation"), value: `${fmt(s.taskProgress)} / ${c.taskGoal} pts`, note: s.taskResult === null ? `due end of day ${c.taskDeadlineDay}` : s.taskResult ? "met" : "missed" },
     { d: "C" as District, name: "Visit", value: `${fmt(s.connectionProgress)} / ${c.connectionGoal} pts`, note: s.connectionResult === null ? `closes end of day ${c.connectionLastOpenDay}` : s.connectionResult ? "met · closed" : "missed · closed" },
     { d: "R" as District, name: "Energy", value: `${fmt(s.energy)} / ${c.energyCap} tokens`, note: "shared reserve" },
     { d: "D" as District, name: "Method", value: `${fmt(s.method, 2)}×`, note: "future work" },
