@@ -4,6 +4,7 @@ import {
   Suspense,
   lazy,
   useEffect,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -118,6 +119,12 @@ export const locations = {
   },
 } as const;
 export type Location = keyof typeof locations;
+const chamberRoute = ["headquarters", "memory", "decision", "parallel", "observatory"] as const;
+const roomRoute = ["hub", ...chamberRoute] as const;
+
+function isTravelControl(target: EventTarget) {
+  return target instanceof Element && !!target.closest("button, a, input, select, textarea, summary, [contenteditable]");
+}
 const Scene = lazy(() => import("./MindScene"));
 
 class SceneBoundary extends Component<
@@ -196,6 +203,8 @@ export default function MindUniverse(props: Props) {
   const [settings, setSettings] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [arrived, setArrived] = useState(false);
+  const wheelGesture = useRef({ last: -Infinity, distance: 0, moved: false });
+  const swipeStart = useRef<{ x: number; y: number; room: Location } | null>(null);
   const [thought, setThought] = useState("");
   const [thoughtResult, setThoughtResult] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -213,6 +222,7 @@ export default function MindUniverse(props: Props) {
     : null;
   const info = locations[room];
   const flat = lite || unavailable;
+  const canScrollRooms = entered && !props.staged && !settings && !mapOpen;
   useEffect(() => {
     setArrived(flat || reduced);
     setMapOpen(false);
@@ -228,6 +238,15 @@ export default function MindUniverse(props: Props) {
     if (next !== room) setArrived(flat || reduced);
     onVisit(next);
     setMapOpen(false);
+  }
+  function moveOneRoom(direction: number) {
+    const route: Location[] = roomRoute.filter(place => place !== "parallel" || history.length > 0);
+    const current = route.indexOf(room);
+    const next = current === -1
+      ? direction > 0 ? "headquarters" : "hub"
+      : route[current + direction];
+    if (!next) return;
+    visit(next);
   }
   function openMemory(id: string) {
     setMemoryId(id);
@@ -263,6 +282,44 @@ export default function MindUniverse(props: Props) {
       >
         <div
           className="universe-canvas"
+          data-room-travel={canScrollRooms ? "true" : undefined}
+          onWheel={event => {
+            if (!canScrollRooms || event.ctrlKey || event.metaKey || isTravelControl(event.target)) return;
+            const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+            if (!delta) return;
+            const now = performance.now();
+            const gesture = wheelGesture.current;
+            // Trackpad momentum belongs to the same gesture. Wait for a pause before switching again.
+            if (now - gesture.last > 180) {
+              gesture.moved = false;
+              gesture.distance = 0;
+            }
+            gesture.last = now;
+            if (gesture.moved) return;
+            if (Math.sign(delta) !== Math.sign(gesture.distance)) gesture.distance = 0;
+            gesture.distance += delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 56 : 1);
+            if (Math.abs(gesture.distance) >= 48) {
+              gesture.moved = true;
+              moveOneRoom(Math.sign(gesture.distance));
+            }
+          }}
+          onTouchStart={event => {
+            const touch = event.touches[0];
+            swipeStart.current = canScrollRooms && event.touches.length === 1 && !isTravelControl(event.target)
+              ? { x: touch.clientX, y: touch.clientY, room }
+              : null;
+          }}
+          onTouchCancel={() => { swipeStart.current = null; }}
+          onTouchEnd={event => {
+            const start = swipeStart.current;
+            swipeStart.current = null;
+            const end = event.changedTouches[0];
+            if (!canScrollRooms || !start || !end || start.room !== room || event.touches.length) return;
+            const x = start.x - end.clientX;
+            const y = start.y - end.clientY;
+            const distance = Math.abs(y) >= Math.abs(x) ? y : x;
+            if (Math.abs(distance) >= 55) moveOneRoom(Math.sign(distance));
+          }}
           aria-label={
             flat
               ? "Lightweight illustrated mind world"
@@ -498,11 +555,12 @@ export default function MindUniverse(props: Props) {
                 </h1>
                 <p>{info.subtitle}</p>
                 <span className="travel-status" role="status">
-                  {arrived
-                    ? room === "hub"
-                      ? "Choose an island or follow a pathway."
-                      : "You’ve arrived. Stay curious."
-                    : `Travelling to ${info.title}…`}
+                  {!arrived ? `Travelling to ${info.title}…` : canScrollRooms && (
+                    <>
+                      <span className="room-wheel-hint">Scroll the scene to move between rooms</span>
+                      <span className="room-swipe-hint">Swipe the scene to move between rooms</span>
+                    </>
+                  )}
                 </span>
               </div>
               )}
@@ -866,15 +924,7 @@ export default function MindUniverse(props: Props) {
                   <span>Hub</span>
                 </button>
                 <span className="dock-divider" />
-                {(
-                  [
-                    "headquarters",
-                    "memory",
-                    "decision",
-                    "parallel",
-                    "observatory",
-                  ] as const
-                ).map((place) => (
+                {chamberRoute.map((place) => (
                   <button
                     key={place}
                     className={room === place ? "current-location" : ""}

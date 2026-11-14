@@ -18,6 +18,12 @@
   position: absolute;
   inset: 0;
 }
+.universe-canvas[data-room-travel="true"] { touch-action: pinch-zoom; }
+.room-swipe-hint { display: none; }
+@media (pointer: coarse) {
+  .room-wheel-hint { display: none; }
+  .room-swipe-hint { display: inline; }
+}
 .universe-vignette {
   pointer-events: none;
   background:
