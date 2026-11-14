@@ -9,12 +9,33 @@ import {
   policies,
   proposalsForDay,
   resolve,
+  setupForThought,
   validatePolicy,
   type Policy,
 } from "../src/simulation";
 import { mixGains, projectScore } from "../src/audio";
+import { memoriesFor } from "../src/memories";
 
 describe("the MINDSPACE contract", () => {
+  it("maps disclosed thought keywords to playable assumptions without changing the source setup", () => {
+    const setup = { ...judgeSetup, energy: 3, energyCap: 3 };
+    const original = { ...setup };
+    const tired = createWorld(
+      setupForThought("EXHAUSTED, but nearly done!", setup),
+    );
+    expect(tired.state.energy).toBe(3); // obey a capacity below the tired preset
+    expect(tired.state.taskProgress).toBe(10);
+    expect(
+      createWorld(setupForThought("Already prepared and tired", judgeSetup))
+        .state.energy,
+    ).toBe(4);
+    const ordinary = setupForThought("A retired friend is here", {
+      ...judgeSetup,
+      taskProgress: 10,
+    });
+    expect(ordinary).toEqual(judgeSetup); // word boundaries; no invented progress
+    expect(setup).toEqual(original);
+  });
   it("rejects invalid configuration and budgets, and bounds finite resources", () => {
     for (const energyCap of [0, -1, Infinity, NaN])
       expect(() => createWorld({ ...judgeSetup, energyCap })).toThrow();
@@ -41,6 +62,9 @@ describe("the MINDSPACE contract", () => {
     expect(
       resolve({ ...state, energy: 7 }, [allRest], rules).activity.restored,
     ).toBe(0);
+    expect(
+      memoriesFor([resolve({ ...state, energy: 7 }, [allRest], rules)], rules),
+    ).toEqual([]);
     const allWork = { ...allRest, allocation: { A: 6, C: 0, D: 0, R: 0 } };
     const work = resolve(state, [allWork], rules);
     expect(work.after.energy).toBe(0);
@@ -60,6 +84,11 @@ describe("the MINDSPACE contract", () => {
     const first = resolve(state, policies, rules, "method");
     expect(first.activity.taskGain).toBe(3); // 2 × 2 × (0.25 + 0.75 × 8/12) × 1
     expect(first.after.method).toBeCloseTo(1.1);
+    expect(memoriesFor([first], rules).map((m) => m.district)).toEqual([
+      "C",
+      "D",
+      "R",
+    ]);
     expect(first.after.energy).toBeCloseTo(5.9);
     expect(first.after.connectionResult).toBe(false);
     expect(first.after.taskResult).toBeNull();
@@ -163,6 +192,18 @@ describe("the MINDSPACE contract", () => {
     expect(other.election).toEqual(source.election);
     expect(other.external).toEqual(source.external);
     expect(other.manual).toBe(true);
+    expect(
+      memoriesFor([source], rules).map((m) => [m.day, m.district, m.title]),
+    ).toEqual([
+      [1, "C", "A visit to remember"],
+      [1, "R", "A little replenishment"],
+    ]);
+    expect(
+      memoriesFor([other], rules).map((m) => [m.day, m.district, m.title]),
+    ).toEqual([
+      [1, "A", "Halfway there"],
+      [1, "R", "A little replenishment"],
+    ]);
     other.before.energy = 999;
     other.policies[0].allocation.A = 999;
     expect(JSON.stringify(source)).toBe(before);

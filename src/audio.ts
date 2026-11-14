@@ -81,6 +81,8 @@ class AudioEngine {
   context?: AudioContext;
   private master?: GainNode;
   private channels: GainNode[][] = [];
+  private meters: AnalyserNode[][] = [];
+  private meterData = new Float32Array(32);
   private timer?: ReturnType<typeof setInterval>;
   private beat = 0;
   private nextTime = 0;
@@ -103,10 +105,18 @@ class AudioEngine {
       limiter.attack.value = 0.003;
       limiter.release.value = 0.2;
       this.master.connect(limiter).connect(ctx.destination);
-      this.channels = [0, 1].map(() =>
+      this.meters = [0, 1].map(() =>
         districts.map(() => {
+          const meter = ctx.createAnalyser();
+          meter.fftSize = 32;
+          meter.connect(this.master!);
+          return meter;
+        }),
+      );
+      this.channels = [0, 1].map((_, world) =>
+        districts.map((_, part) => {
           const gain = ctx.createGain();
-          gain.connect(this.master!);
+          gain.connect(this.meters[world][part]);
           return gain;
         }),
       );
@@ -114,6 +124,14 @@ class AudioEngine {
     }
     await this.context.resume();
     return this.context.state === "running";
+  }
+  level(district: District) {
+    let energy = 0;
+    for (const world of this.meters) {
+      world[districts.indexOf(district)].getFloatTimeDomainData(this.meterData);
+      for (const sample of this.meterData) energy += sample * sample;
+    }
+    return Math.min(1, Math.sqrt(energy / this.meterData.length) * 10);
   }
   setFrame(frame: Frame) {
     this.pending = frame;
@@ -260,6 +278,7 @@ class AudioEngine {
     void this.context?.close();
     this.context = undefined;
     this.channels = [];
+    this.meters = [];
   }
 }
 export const audio = new AudioEngine();
