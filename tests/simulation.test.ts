@@ -195,14 +195,14 @@ describe("the MINDSPACE contract", () => {
     expect(
       memoriesFor([source], rules).map((m) => [m.day, m.district, m.title]),
     ).toEqual([
-      [1, "C", "A visit to remember"],
-      [1, "R", "A little replenishment"],
+      [1, "C", "Visit goal met (+3)"],
+      [1, "R", "3 energy restored"],
     ]);
     expect(
       memoriesFor([other], rules).map((m) => [m.day, m.district, m.title]),
     ).toEqual([
-      [1, "A", "Halfway there"],
-      [1, "R", "A little replenishment"],
+      [1, "A", "Presentation halfway on day 1"],
+      [1, "R", "3 energy restored"],
     ]);
     other.before.energy = 999;
     other.policies[0].allocation.A = 999;

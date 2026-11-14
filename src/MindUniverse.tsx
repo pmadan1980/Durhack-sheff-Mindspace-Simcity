@@ -74,7 +74,7 @@ export const locations = {
   decision: {
     title: "Decision Chamber",
     subtitle: "Different voices. One shared future.",
-    symbol: "△",
+    symbol: "⚖",
     color: "#ffd36c",
   },
   parallel: {
@@ -712,7 +712,9 @@ export default function MindUniverse(props: Props) {
                   {...motionProps}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  <span className="persona-symbol">{info.symbol}</span>
+                  <span className="persona-symbol">
+                    <VoiceIcon d={district} size={64} />
+                  </span>
                   <span className="cosmic-eyebrow">
                     MEET YOUR {districtInfo[district].name.toUpperCase()} VOICE
                   </span>

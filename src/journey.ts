@@ -32,6 +32,8 @@ export type Scene =
   | "summary"
   | "branch"
   | "comparison"
+  | "listen"
+  | "closing"
   | "free";
 
 export const storySteps: { scene: Scene; label: string }[] = [
@@ -44,6 +46,14 @@ export const storySteps: { scene: Scene; label: string }[] = [
   { scene: "result", label: "Result" },
   { scene: "consequences", label: "Consequences" },
   { scene: "reflection", label: "Reflection" },
+];
+
+export const worldSteps: { scene: Scene; label: string }[] = [
+  { scene: "summary", label: "Story" },
+  { scene: "branch", label: "What if" },
+  { scene: "comparison", label: "Side by side" },
+  { scene: "listen", label: "Listen" },
+  { scene: "closing", label: "Reflect" },
 ];
 
 export interface World {
@@ -276,6 +286,10 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
         case "branch":
           return { ...j, scene: "comparison" };
         case "comparison":
+          return { ...j, scene: "listen" };
+        case "listen":
+          return { ...j, scene: "closing" };
+        case "closing":
           return { ...j, scene: "free" };
         default:
           return j;
@@ -401,6 +415,8 @@ export const sceneRoom = {
   summary: "memory",
   branch: "memory",
   comparison: "parallel",
+  listen: "parallel",
+  closing: "parallel",
   free: "decision",
 } as const satisfies Record<Scene, string>;
 

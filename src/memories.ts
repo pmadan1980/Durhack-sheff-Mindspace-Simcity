@@ -30,27 +30,29 @@ export function memoriesFor(rounds: Round[], c: Config): Memory[] {
     if (milestone !== undefined)
       add(
         "A",
-        milestone === c.taskGoal ? "Presentation ready" : "Halfway there",
+        milestone === c.taskGoal
+          ? `Presentation ready on day ${r.before.day}`
+          : `Presentation halfway on day ${r.before.day}`,
         `${fmt(r.after.taskProgress)} / ${c.taskGoal} presentation points. ${r.after.taskResult === false ? "The day-3 deadline was already missed." : `Reached on day ${r.before.day}; deadline: day ${c.taskDeadlineDay}.`}`,
       );
     if (r.activity.connectionGain > 0)
       add(
         "C",
         r.after.connectionProgress >= c.connectionGoal
-          ? "A visit to remember"
-          : "Time together",
+          ? `Visit goal met (+${fmt(r.activity.connectionGain)})`
+          : `Time with your friend (+${fmt(r.activity.connectionGain)})`,
         `+${fmt(r.activity.connectionGain)} visit points; ${fmt(r.after.connectionProgress)} / ${c.connectionGoal} reached before the window closed.`,
       );
     if (r.activity.methodGain > 0)
       add(
         "D",
-        "A new way forward",
+        `Method improved to ${fmt(r.after.method, 2)}×`,
         `${fmt(r.start.method, 2)}× → ${fmt(r.after.method, 2)}× method. Available from the next day, not retroactively.`,
       );
     if (r.activity.restored > 0)
       add(
         "R",
-        "A little replenishment",
+        `${fmt(r.activity.restored)} energy restored`,
         `${fmt(r.activity.restored)} energy replenished after costs and the cap. Net change: ${r.activity.energyDelta >= 0 ? "+" : ""}${fmt(r.activity.energyDelta)}; ended at ${fmt(r.after.energy)} / ${c.energyCap}.`,
       );
     return memories;
