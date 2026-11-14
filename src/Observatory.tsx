@@ -12,6 +12,7 @@ import {
   type Policy,
 } from "./simulation";
 import { audioConfig, projectScore } from "./audio";
+import VoiceIcon from "./VoiceIcon";
 
 interface Props {
   round?: Round;
@@ -168,11 +169,8 @@ export default function Observatory({
             </span>
             {round?.events.map((event) => (
               <div key={event.id}>
-                <span
-                  className="district-symbol"
-                  style={{ color: districtInfo[event.district].color }}
-                >
-                  {districtInfo[event.district].symbol}
+                <span className="district-symbol">
+                  <VoiceIcon d={event.district} size={22} />
                 </span>
                 <span>{event.label}</span>
                 <b>
@@ -205,9 +203,7 @@ export default function Observatory({
           <div className="weight-row">
             {districts.map((d) => (
               <span key={d}>
-                <i style={{ color: districtInfo[d].color }}>
-                  {districtInfo[d].symbol}
-                </i>{" "}
+                <VoiceIcon d={d} size={18} />{" "}
                 {districtInfo[d].name}{" "}
                 <b>{fmt(b.resident.weights[d] * 100, 0)}%</b>
               </span>
@@ -277,9 +273,8 @@ export default function Observatory({
             <div className="mapping-row" key={d}>
               <span
                 className="district-symbol"
-                style={{ color: districtInfo[d].color }}
               >
-                {districtInfo[d].symbol}
+                <VoiceIcon d={d} size={22} />
               </span>
               <div>
                 <b>

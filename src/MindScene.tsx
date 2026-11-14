@@ -15,7 +15,9 @@ import { memoriesFor, type Memory } from "./memories";
 import { locations, type Location } from "./MindUniverse";
 import { audio } from "./audio";
 import { planAccent, type Cue } from "./journey";
-import LandingBrain, { landingView } from "./LandingBrain";
+import VoiceIcon from "./VoiceIcon";
+import LandingBrain, { glowMap, landingView } from "./LandingBrain";
+import { rng } from "./brainShape";
 
 type Point = [number, number, number];
 const places: Record<Location, Point> = {
@@ -120,7 +122,7 @@ function CameraJourney({
     // Guided scenes keep the 3D action centred in the space beside the opaque story panel.
     let offsetX = 0,
       offsetY = 0;
-    if (entered && framing && room !== "parallel") {
+    if (entered && framing) {
       if (narrow) {
         offsetY = Math.max(0, Math.min(size.height * 0.52, size.height - 260) / 2 - 80);
       } else {
@@ -129,10 +131,11 @@ function CameraJourney({
         const k = Math.min(2.4, size.width / Math.max(320, size.width - panel));
         const lookAt = new THREE.Vector3(...look);
         const away = new THREE.Vector3(...dest).sub(lookAt);
-        if (room !== "hub") away.set(0, 5.2, 11);
-        away.multiplyScalar(room === "hub" ? Math.min(k, 1.5) : k * 0.85);
+        const wide = room === "hub" || room === "parallel";
+        if (!wide) away.set(0, 5.2, 11);
+        away.multiplyScalar(wide ? Math.min(k, 1.5) : k * 0.85);
         dest = lookAt.clone().add(away).toArray() as Point;
-        if (room !== "hub") look = [p[0], p[1] + 1, p[2]];
+        if (!wide) look = [p[0], p[1] + 1, p[2]];
       }
     }
     if (offsetX !== viewOffset.current[0] || offsetY !== viewOffset.current[1] || size.width !== viewOffset.current[2]) {
@@ -171,30 +174,38 @@ function CameraJourney({
   return null;
 }
 
+/** Holographic platform in the point-cloud brain's style: glass disc, light rings, a cone of glowing dust. */
 function Platform({ color, radius = 3.4 }: { color: string; radius?: number }) {
+  const dust = useMemo(() => {
+    const random = rng(Math.round(radius * 100));
+    const p: number[] = [];
+    for (let i = 0; i < Math.round(radius * 260); i++) {
+      const depth = random();
+      const r = radius * (1 - depth) * Math.sqrt(random());
+      const a = random() * Math.PI * 2;
+      p.push(Math.cos(a) * r, -depth * radius * 0.7, Math.sin(a) * r);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+    return g;
+  }, [radius]);
+  useEffect(() => () => dust.dispose(), [dust]);
   return (
     <group>
-      <mesh position={[0, -0.65, 0]} rotation={[0, 0, Math.PI]}>
-        <coneGeometry args={[radius, 2, 7]} />
-        <meshStandardMaterial color="#333050" roughness={0.9} flatShading />
+      <mesh position={[0, 0.12, 0]}>
+        <cylinderGeometry args={[radius, radius * 0.97, 0.12, 64]} />
+        <meshPhysicalMaterial color="#141838" metalness={0.3} roughness={0.25} transparent opacity={0.88} clearcoat={1} />
       </mesh>
-      <mesh position={[0, 0.03, 0]}>
-        <cylinderGeometry args={[radius, radius * 0.92, 0.4, 48]} />
-        <meshStandardMaterial
-          color="#585370"
-          roughness={0.6}
-          metalness={0.25}
-        />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.25, 0]}>
-        <ringGeometry args={[radius - 0.1, radius, 64]} />
-        <meshBasicMaterial
-          color={color}
-          toneMapped={false}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      <Glow color={color} size={radius * 3} position={[0, -0.7, 0]} />
+      {[1, 0.72, 0.42].map((k, i) => (
+        <mesh key={k} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.19, 0]}>
+          <ringGeometry args={[radius * k - (i ? 0.02 : 0.06), radius * k, 96]} />
+          <meshBasicMaterial color={i ? "#9db4ff" : color} transparent opacity={i ? 0.35 : 0.95} toneMapped={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} depthWrite={false} />
+        </mesh>
+      ))}
+      <points geometry={dust}>
+        <pointsMaterial size={0.09} map={glowMap()} color={color} transparent opacity={0.55} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </points>
+      <Glow color={color} size={radius * 2.6} position={[0, -0.4, 0]} />
     </group>
   );
 }
@@ -603,7 +614,7 @@ function DistrictIsland({
             style={{ "--island": color } as React.CSSProperties}
             onClick={() => onVisit(d)}
           >
-            <span>{locations[d].symbol}</span>
+            <VoiceIcon d={d} size={26} />
             {locations[d].title}
             <small>EXPLORE DISTRICT ↗</small>
           </button>
@@ -707,14 +718,15 @@ function MemoryOrb({
         zIndexRange={[20, 0]}
       >
         <button
-          className="orb-label"
+          className={`orb-label ${hovered ? "orb-label-open" : ""}`}
+          aria-label={`Day ${memory.day}: ${memory.title}`}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           onFocus={() => setHovered(true)}
           onBlur={() => setHovered(false)}
           onClick={onSelect}
         >
-          Day {memory.day} · {memory.title}
+          {hovered ? memory.title : ""}
         </button>
       </Html>
     </group>
@@ -807,26 +819,35 @@ function ChamberRoom({
     <group position={places[room]}>
       <Platform color={color} radius={5} />
       {room === "memory" ? (
-        <group ref={rotating}>
-          {memories.map((memory, i) => {
-            const a = i * 2.399;
-            return (
-              <group
-                key={memory.id}
-                position={[
-                  Math.cos(a) * (2.2 + (i % 2)),
-                  1.3 + (i % 3) * 1.1,
-                  Math.sin(a) * (2.2 + (i % 2)),
-                ]}
-              >
-                <MemoryOrb
-                  memory={memory}
-                  reduced={reduced}
-                  onSelect={() => onMemory(memory.id)}
-                />
-              </group>
-            );
-          })}
+        <group>
+          {(() => {
+            const days = [...new Set(memories.map((m) => m.day))];
+            const span = Math.max(1, days.length - 1);
+            return days.map((day, col) => {
+              const t = days.length === 1 ? 0.5 : col / span;
+              const a = Math.PI * (0.8 - 0.6 * t);
+              const x = Math.cos(a) * 3.6,
+                z = -Math.sin(a) * 2.2 + 0.4;
+              return (
+                <group key={day} position={[x, 0, z]}>
+                  <mesh position={[0, 1.6, 0]}>
+                    <cylinderGeometry args={[0.015, 0.015, 2.8, 6]} />
+                    <meshBasicMaterial color="#9db4ff" transparent opacity={0.35} />
+                  </mesh>
+                  {memories
+                    .filter((m) => m.day === day)
+                    .map((memory, k) => (
+                      <group key={memory.id} position={[0, 0.8 + k * 0.85, 0]}>
+                        <MemoryOrb memory={memory} reduced={reduced} onSelect={() => onMemory(memory.id)} />
+                      </group>
+                    ))}
+                  <Html center position={[0, 0.35, 0]} distanceFactor={18} zIndexRange={[20, 0]}>
+                    <span className="memory-day-label">Day {day}</span>
+                  </Html>
+                </group>
+              );
+            });
+          })()}
           {!memories.length && (
             <mesh position={[0, 2, 0]}>
               <torusGeometry args={[1.5, 0.025, 8, 64]} />
@@ -1288,7 +1309,7 @@ export default function MindScene({
                         </group>
                       ))}
                     </group>
-                    <Html position={[0, 4, 0]} center zIndexRange={[10, 0]}>
+                    <Html position={[0, 2.4, 0]} center zIndexRange={[10, 0]}>
                       <span className="branch-label">
                         {i ? "B / WHAT IF" : "A / THE ELECTED PATH"}
                       </span>

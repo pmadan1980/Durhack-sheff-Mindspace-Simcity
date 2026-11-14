@@ -41,6 +41,7 @@ import {
 import { audio, audioConfig, projectScore } from "./audio";
 import Observatory from "./Observatory";
 import JourneyStage from "./GuidedJourney";
+import VoiceIcon from "./VoiceIcon";
 import {
   initialJourney,
   journeyReducer,
@@ -84,6 +85,7 @@ export default function App() {
   const [pair, setPair] = useState<{ a: Round; b: Round } | null>(null);
   // A guided counterfactual covers the changed day through the last story day in both worlds.
   const [horizon, setHorizon] = useState<{ day: number; a: Round[]; b: Round[] } | null>(null);
+  const [unfold, setUnfold] = useState(0);
   const [mix, setMix] = useState(0.5);
   const [comparePlaying, setComparePlaying] = useState(true);
   const [hiddenPause, setHiddenPause] = useState(false);
@@ -148,6 +150,8 @@ export default function App() {
       setRoom(sceneRoom[scene]);
     setListening(false);
     if (scene !== "result") setReactions([]);
+    if ((scene === "listen" || scene === "closing") && horizon)
+      setPair({ a: horizon.a.at(-1)!, b: horizon.b.at(-1)! });
   }, [scene, entered, journey.exploring]);
   useEffect(() => {
     const visibility = () => {
@@ -266,9 +270,10 @@ export default function App() {
     const r = replay(history, day, policyId, c);
     audio.reset();
     setHorizon({ day, ...r });
-    setPair({ a: r.a.at(-1)!, b: r.b.at(-1)! });
+    setUnfold(0);
+    setPair({ a: r.a[0], b: r.b[0] });
     setMix(0.5);
-    setComparePlaying(true);
+    setComparePlaying(false);
     setRoom("parallel");
   }
   function compare(round = selected) {
@@ -375,6 +380,18 @@ export default function App() {
             }}
             onRestart={restart}
             onBranch={branchHorizon}
+            horizon={horizon}
+            unfold={unfold}
+            onUnfold={(i) => {
+              if (!horizon) return;
+              setUnfold(i);
+              audio.reset();
+              setPair({ a: horizon.a[i], b: horizon.b[i] });
+            }}
+            mix={mix}
+            onMix={setMix}
+            loops={comparePlaying}
+            onLoops={setComparePlaying}
             onReact={(list) =>
               setReactions(list.map((r, i) => ({ ...r, key: performance.now() + i })))
             }
@@ -433,7 +450,7 @@ export default function App() {
     >
       <div className="app-shell">
         {entered && (
-          <main className="workspace">
+          <main className={`workspace ${staged ? "workspace-staged" : ""}`}>
             {hiddenPause && (
               <div className="away-banner" role="status">
                 Your world paused while this tab was away. No days were skipped.
@@ -602,7 +619,7 @@ export default function App() {
                   aria-label="Shared world resources"
                 >
                   <Resource
-                    symbol="△"
+                    symbol="A"
                     color={districtInfo.A.color}
                     name="Presentation"
                     value={state.taskProgress}
@@ -615,7 +632,7 @@ export default function App() {
                     )}
                   />
                   <Resource
-                    symbol="◎"
+                    symbol="C"
                     color={districtInfo.C.color}
                     name="The visit"
                     value={state.connectionProgress}
@@ -628,7 +645,7 @@ export default function App() {
                     )}
                   />
                   <Resource
-                    symbol="✧"
+                    symbol="D"
                     color={districtInfo.D.color}
                     name="Method"
                     value={state.method}
@@ -637,7 +654,7 @@ export default function App() {
                     detail="Discovery carries into future days"
                   />
                   <Resource
-                    symbol="≈"
+                    symbol="R"
                     color={districtInfo.R.color}
                     name="Shared energy"
                     value={state.energy}
@@ -824,9 +841,7 @@ export default function App() {
                     const delta = pair.b.after[key] - pair.a.after[key];
                     return (
                       <div className="delta-card" key={key}>
-                        <span style={{ color: districtInfo[d].color }}>
-                          {districtInfo[d].symbol}
-                        </span>
+                        <VoiceIcon d={d} size={28} />
                         <div>
                           <small>
                             B − A /{" "}
@@ -859,26 +874,6 @@ export default function App() {
                           ? "Identical-policy comparison: both sets of numbers match."
                           : `Only the day ${pair.a.before.day} action differs.`
                       } Both receive “${pair.a.external.name}”. No later days are simulated.`}{" "}
-                  {horizon && scene === "comparison" && (
-                    <>
-                      <button
-                        className="text-button"
-                        onClick={() => {
-                          dispatch({ type: "explore", on: true });
-                          setSelectedDay(horizon.day);
-                          setRoom("observatory");
-                        }}
-                      >
-                        How did this work? <ArrowRight size={13} />
-                      </button>{" "}
-                      <button
-                        className="text-button"
-                        onClick={() => dispatch({ type: "advance", from: "comparison" })}
-                      >
-                        Explore freely <ArrowRight size={13} />
-                      </button>{" "}
-                    </>
-                  )}
                   <button
                     className="text-button"
                     onClick={() => navigate("World")}
@@ -934,7 +929,7 @@ export default function App() {
                         }
                       >
                         <span className="part-icon">
-                          {districtInfo[d].symbol}
+                          <VoiceIcon d={d} size={30} />
                         </span>
                         <span>
                           {districtInfo[d].name}
@@ -1183,7 +1178,7 @@ function Resource({
   detail,
   suffix,
 }: {
-  symbol: string;
+  symbol: District;
   color: string;
   name: string;
   value: number;
@@ -1194,7 +1189,7 @@ function Resource({
   return (
     <article className="resource">
       <span className="resource-symbol" style={{ color }}>
-        {symbol}
+        <VoiceIcon d={symbol} size={34} />
       </span>
       <div>
         <div className="resource-title">
@@ -1267,9 +1262,7 @@ function Candidate({
   return (
     <article className={`candidate ${leading ? "candidate-leading" : ""}`}>
       <div className="candidate-top">
-        <span className={`candidate-avatar avatar-${index}`}>
-          {index === 0 ? "△" : index === 1 ? "◎" : "✧"}
-        </span>
+        <span className={`candidate-avatar avatar-${index}`}>{index + 1}</span>
         <div>
           <h3>{policy.name}</h3>
           <span>{leading ? label : policy.description}</span>

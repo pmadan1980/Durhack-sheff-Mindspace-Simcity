@@ -35,6 +35,7 @@ import {
   roundFor,
   sameAllocation,
   storySteps,
+  worldSteps,
   type Journey,
   type JourneyAction,
   type Scene,
@@ -76,6 +77,13 @@ interface Props {
   onRestart: () => void;
   onBranch: (day: number, policyId: string) => void;
   onReact: (list: { d: District; kind: "cheer" | "sigh" }[]) => void;
+  horizon: { day: number; a: Round[]; b: Round[] } | null;
+  unfold: number;
+  onUnfold: (i: number) => void;
+  mix: number;
+  onMix: (x: number) => void;
+  loops: boolean;
+  onLoops: (on: boolean) => void;
 }
 
 export default function JourneyStage(props: Props) {
@@ -89,7 +97,9 @@ export default function JourneyStage(props: Props) {
     stage.current?.scrollTo({ top: 0 });
     stage.current?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
   }, [j.scene, day]);
-  const stepIndex = storySteps.findIndex((s) => s.scene === j.scene);
+  const post = worldSteps.some((s) => s.scene === j.scene);
+  const steps = post ? worldSteps : storySteps;
+  const stepIndex = steps.findIndex((s) => s.scene === j.scene);
   const wide = j.scene === "voting";
   return (
     <>
@@ -98,7 +108,7 @@ export default function JourneyStage(props: Props) {
           DAY <b>{Math.min(day, lastGuidedDay(c))}</b> / {lastGuidedDay(c)}
         </span>
         <ol>
-          {storySteps.map((s, i) => (
+          {steps.map((s, i) => (
             <li
               key={s.scene}
               className={
@@ -109,7 +119,6 @@ export default function JourneyStage(props: Props) {
               {s.label}
             </li>
           ))}
-          {j.scene === "summary" && <li className="step-current">Story</li>}
         </ol>
         <div className="journey-tools">
           {j.scene === "voting" && j.locked && j.revealed < j.locked.election.ballots.length && (
@@ -127,7 +136,7 @@ export default function JourneyStage(props: Props) {
         </div>
       </nav>
       <p className="sr-only" role="status" aria-live="polite">
-        {`Day ${day}: ${storySteps[stepIndex]?.label ?? j.scene}`}
+        {`Day ${day}: ${steps[stepIndex]?.label ?? j.scene}`}
       </p>
       <section
         ref={stage}
@@ -145,8 +154,11 @@ export default function JourneyStage(props: Props) {
         {j.scene === "reflection" && <Reflection {...props} advance={advance} />}
         {j.scene === "summary" && <Summary {...props} advance={advance} />}
         {j.scene === "branch" && <Branch {...props} advance={advance} />}
+        {j.scene === "comparison" && <SideBySide {...props} advance={advance} />}
+        {j.scene === "listen" && <Listen {...props} advance={advance} />}
+        {j.scene === "closing" && <Closing {...props} advance={advance} />}
       </section>
-      {j.scene !== "comparison" && <Ribbon state={w.state} rules={c} />}
+      {!post && <Ribbon state={w.state} rules={c} />}
     </>
   );
 }
@@ -368,22 +380,57 @@ function Debate({ journey: j, dispatch, advance, onSpeaker }: SceneProps) {
   useEffect(() => { onSpeaker(speaker); return () => onSpeaker(null); }, [speaker, onSpeaker]);
   const f = forecasts(start, w.proposals, c);
   const done = shown >= lines.length - 1;
+  // Auto-play at reading pace; it stops at the end, on Pause, or while the reader scrolls back.
+  const [auto, setAuto] = useState(true);
+  const [pinned, setPinned] = useState(true);
+  const box = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (el && pinned) el.scrollTop = el.scrollHeight;
+  }, [shown, pinned]);
+  useEffect(() => {
+    if (!auto || !pinned || done || asking) return;
+    const words = current.text.split(/\s+/).length;
+    const timer = window.setTimeout(() => {
+      if (!document.hidden) dispatch({ type: "line", line: shown + 1 });
+    }, 1800 + words * 260);
+    return () => window.clearTimeout(timer);
+  }, [auto, pinned, done, asking, shown, current.text, dispatch]);
   return (
     <>
       <span className="cosmic-eyebrow">DAY {w.state.day} · THE DEBATE · DECISION CHAMBER</span>
       <h2 tabIndex={-1}>Hear them argue it out.</h2>
-      <ol className="transcript">
+      <div className="now-speaking" style={{ "--voice": color(current.speaker) } as CSSProperties} aria-live="polite">
+        {current.speaker === "N" ? <span className="line-mark">✳</span> : <VoiceIcon d={current.speaker} size={40} speaking />}
+        <span>
+          <small>NOW SPEAKING · LINE {shown + 1} OF {lines.length}</small>
+          <b>{speakerName(current.speaker)}</b>
+        </span>
+        <button className="secondary small" disabled={done} onClick={() => setAuto(!auto)} aria-pressed={auto && !done}>
+          {auto && !done ? <Pause size={13} /> : <Play size={13} />} {done ? "Finished" : auto ? "Pause" : "Auto-play"}
+        </button>
+      </div>
+      <ol
+        className="transcript transcript-box"
+        ref={box}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setPinned(el.scrollTop + el.clientHeight >= el.scrollHeight - 24);
+        }}
+      >
         {lines.slice(0, shown + 1).map((l, i) => (
           <TranscriptLine key={i} line={l} current={i === shown} />
         ))}
       </ol>
+      {!pinned && (
+        <button className="jump-latest" onClick={() => { setPinned(true); box.current?.scrollTo({ top: box.current.scrollHeight }); }}>
+          Jump to the latest line ↓
+        </button>
+      )}
       {current.policy !== undefined && (
         <PlanChip policy={w.proposals[current.policy]} f={f[current.policy]} rules={c} />
       )}
       <div className="debate-controls">
-        <button className="secondary small" disabled={done} onClick={() => dispatch({ type: "line", line: shown + 1 })}>
-          Next line <ArrowRight size={13} />
-        </button>
         <button className="text-button" disabled={done} onClick={() => dispatch({ type: "line", line: lines.length - 1 })}>
           Show full exchange
         </button>
@@ -442,13 +489,12 @@ function TranscriptLine({ line, current }: { line: Line; current: boolean }) {
 function Tokens({ policy }: { policy: Policy }) {
   return (
     <span className="tokens" aria-label={districts.map((d) => `${districtInfo[d].name} ${policy.allocation[d]}`).join(", ")}>
-      {districts.flatMap((d) =>
-        Array.from({ length: policy.allocation[d] }, (_, i) => (
-          <i key={`${d}${i}`} style={{ background: districtInfo[d].color }} title={districtInfo[d].name}>
-            {districtInfo[d].symbol}
-          </i>
-        )),
-      )}
+      {districts.filter((d) => policy.allocation[d] > 0).map((d) => (
+        <span key={d} className="token-chip" style={{ "--voice": districtInfo[d].color } as CSSProperties}>
+          <VoiceIcon d={d} size={18} />
+          {districtInfo[d].name} <b>×{policy.allocation[d]}</b>
+        </span>
+      ))}
     </span>
   );
 }
@@ -526,7 +572,7 @@ function Intervention({ journey: j, dispatch, advance, onSpeaker, onReact }: Sce
                   const blocked = d === "C" && !open;
                   return (
                     <div key={d} className="tray-row" style={{ "--voice": districtInfo[d].color } as CSSProperties}>
-                      <span>{districtInfo[d].symbol} {districtInfo[d].name}</span>
+                      <span className="tray-name"><VoiceIcon d={d} size={20} /> {districtInfo[d].name}</span>
                       <button aria-label={`Remove a ${districtInfo[d].name} block`} disabled={draft.allocation[d] <= 0}
                         onClick={() => setDraft({ ...draft, allocation: { ...draft.allocation, [d]: draft.allocation[d] - 1 } })}>
                         <Minus size={13} />
@@ -767,7 +813,7 @@ function Consequences({ journey: j, advance, dispatch, onFocus, soundOn, onSound
         <tbody>
           {rows.map((row) => (
             <tr key={row.d} className={focus === row.d ? "ledger-focus" : ""} style={{ "--voice": districtInfo[row.d].color } as CSSProperties}>
-              <th><button onClick={() => setFocus(focus === row.d ? null : row.d)} aria-expanded={focus === row.d}>{districtInfo[row.d].symbol} {row.name}</button></th>
+              <th><button onClick={() => setFocus(focus === row.d ? null : row.d)} aria-expanded={focus === row.d}><VoiceIcon d={row.d} size={18} /> {row.name}</button></th>
               <td>{row.before}</td><td>{row.change}</td><td>{row.after}</td>
             </tr>
           ))}
@@ -908,6 +954,150 @@ function Branch({ journey: j, onBranch, advance }: SceneProps) {
   );
 }
 
+const worldStats = (s: State, c: Config) =>
+  [
+    { d: "A" as District, name: "Presentation", v: `${fmt(s.taskProgress)} / ${c.taskGoal}` },
+    { d: "C" as District, name: "Visit", v: `${fmt(s.connectionProgress)} / ${c.connectionGoal}` },
+    { d: "R" as District, name: "Energy", v: `${fmt(s.energy)} / ${c.energyCap}` },
+    { d: "D" as District, name: "Method", v: `${fmt(s.method, 2)}×` },
+  ].filter((x) => x.d !== "C" || c.connectionLastOpenDay > 0);
+
+function SideBySide({ journey: j, horizon, unfold, onUnfold, advance }: SceneProps) {
+  const c = j.world.rules;
+  if (!horizon) return null;
+  const last = horizon.a.length - 1;
+  const i = Math.min(unfold, last);
+  return (
+    <>
+      <span className="cosmic-eyebrow">PARALLEL WORLDS · SIDE BY SIDE</span>
+      <h2 tabIndex={-1}>World B unfolds next to World A.</h2>
+      <p className="stage-lede">
+        Same start, same morning events. On day {horizon.day}, World B was given <b>{horizon.b[0].policy.name}</b> instead of <b>{horizon.a[0].policy.name}</b>.
+        After that, its residents vote normally on the same proposals.
+      </p>
+      <ol className="unfold">
+        {horizon.a.slice(0, i + 1).map((ra, k) => {
+          const rb = horizon.b[k];
+          return (
+            <li key={ra.id} className={k === i ? "unfold-current" : ""}>
+              <b className="unfold-day">Day {ra.before.day}</b>
+              {[["A", ra], ["B", rb]].map(([label, r]) => {
+                const round = r as Round;
+                return (
+                  <div key={label as string} className={`unfold-world world-${(label as string).toLowerCase()}`}>
+                    <small>WORLD {label as string}{k === 0 && label === "B" ? " · INTERVENTION" : ""}</small>
+                    <span>{round.policy.name}{k > 0 || label === "A" ? ` · ${round.election.counts[round.election.winner]}/${round.election.ballots.length} votes` : ""}</span>
+                    <span className="unfold-stats">
+                      {worldStats(round.after, c).map((x) => (
+                        <em key={x.name}><VoiceIcon d={x.d} size={16} /> {x.name} {x.v}</em>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+            </li>
+          );
+        })}
+      </ol>
+      {i < last ? (
+        <Primary label={`Show day ${horizon.a[i + 1].before.day}`} onClick={() => onUnfold(i + 1)} />
+      ) : (
+        <Primary label="Listen to both worlds" onClick={() => advance("comparison")} />
+      )}
+    </>
+  );
+}
+
+function Listen({ journey: j, horizon, mix, onMix, loops, onLoops, soundOn, onSound, solo, onSolo, advance }: SceneProps) {
+  const c = j.world.rules;
+  if (!horizon) return null;
+  const a = horizon.a.at(-1)!, b = horizon.b.at(-1)!;
+  const sa = projectScore(a.after, a, horizon.a.at(-2), c);
+  const sb = projectScore(b.after, b, horizon.b.at(-2), c);
+  const layers: { d: District; what: string; a: string; b: string }[] = [
+    { d: "A", what: "Melody: more notes for more presentation progress that day", a: `${sa.density.A} notes`, b: `${sb.density.A} notes` },
+    { d: "C", what: "Call and response: visit points that day", a: sa.density.C ? `${sa.density.C} calls` : "silent", b: sb.density.C ? `${sb.density.C} calls` : "silent" },
+    { d: "D", what: "Counterline: plays once a method gain is in effect", a: sa.density.D ? "playing" : "silent", b: sb.density.D ? "playing" : "silent" },
+    { d: "R", what: "Sustained bass: energy actually restored that day", a: sa.density.R ? "sustained" : "quiet", b: sb.density.R ? "sustained" : "quiet" },
+  ];
+  return (
+    <>
+      <span className="cosmic-eyebrow">PARALLEL WORLDS · LISTEN</span>
+      <h2 tabIndex={-1}>Hear both worlds.</h2>
+      <p className="stage-lede">
+        Each world plays its last day (day {a.before.day}) as music. The slider blends the two
+        soundtracks. <b>It blends sound, not outcomes:</b> no number changes.
+      </p>
+      {!soundOn ? (
+        <button className="secondary" onClick={onSound}><Headphones size={14} /> Enable sound</button>
+      ) : (
+        <button className="secondary" onClick={() => onLoops(!loops)}>
+          {loops ? <Pause size={14} /> : <Play size={14} />} {loops ? "Pause both worlds" : "Play both worlds"}
+        </button>
+      )}
+      <div className="mix-control">
+        <button aria-pressed={mix === 0} onClick={() => onMix(0)}>World A only</button>
+        <input type="range" min={0} max={1} step={0.01} value={mix} aria-label="Blend World A and World B" onChange={(e) => onMix(+e.target.value)} />
+        <button aria-pressed={mix === 1} onClick={() => onMix(1)}>World B only</button>
+      </div>
+      <p className="mix-readout">{Math.round((1 - mix) * 100)}% World A · {Math.round(mix * 100)}% World B</p>
+      <table className="ledger layer-table">
+        <thead><tr><th>Layer</th><th>World A</th><th>World B</th><th /></tr></thead>
+        <tbody>
+          {layers.map((l) => (
+            <tr key={l.d} className={solo === l.d ? "ledger-focus" : ""} style={{ "--voice": districtInfo[l.d].color } as CSSProperties}>
+              <th><span className="layer-name"><VoiceIcon d={l.d} size={20} /> {districtInfo[l.d].name}</span><small>{l.what}</small></th>
+              <td>{l.a}</td><td>{l.b}</td>
+              <td><button className="text-button" aria-pressed={solo === l.d} onClick={() => onSolo(solo === l.d ? null : l.d)}>{solo === l.d ? "Unsolo" : "Solo"}</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Primary label="Reflect on the difference" onClick={() => advance("listen")} />
+    </>
+  );
+}
+
+function Closing({ journey: j, horizon, onObservatory, advance }: SceneProps) {
+  const c = j.world.rules;
+  if (!horizon) return null;
+  const a = horizon.a.at(-1)!.after, b = horizon.b.at(-1)!.after;
+  const rows = worldStats(a, c).map((x, i) => {
+    const key = (["taskProgress", "connectionProgress", "energy", "method"] as const)[["A", "C", "R", "D"].indexOf(x.d)];
+    return { ...x, va: a[key], vb: b[key], i };
+  });
+  return (
+    <>
+      <span className="cosmic-eyebrow">PARALLEL WORLDS · REFLECT</span>
+      <h2 tabIndex={-1}>One decision, two worlds.</h2>
+      <p className="stage-lede">
+        Changing only day {horizon.day} from {horizon.a[0].policy.name} to {horizon.b[0].policy.name} gives this by the end of day {c.taskDeadlineDay}:
+      </p>
+      <table className="ledger">
+        <thead><tr><th>Resource</th><th>World A</th><th>World B</th><th>B − A</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.name} style={{ "--voice": districtInfo[r.d].color } as CSSProperties}>
+              <th><span className="layer-name"><VoiceIcon d={r.d} size={18} /> {r.name}</span></th>
+              <td>{fmt(r.va, 2)}</td><td>{fmt(r.vb, 2)}</td>
+              <td>{signed(r.vb - r.va, 2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <ul className="since-list">
+        <li>Deadline: World A {a.taskResult ? "met" : "missed"} it; World B {b.taskResult ? "met" : "missed"} it.</li>
+        {c.connectionLastOpenDay > 0 && <li>Visit: World A {a.connectionResult ? "protected" : "lost"} it; World B {b.connectionResult ? "protected" : "lost"} it.</li>}
+      </ul>
+      <p className="stage-note">World B is an intervention, not a new election result. Your original world is unchanged.</p>
+      <div className="secondary-row">
+        <button className="text-button" onClick={onObservatory}>How did this work?</button>
+      </div>
+      <Primary label="Explore freely" onClick={() => advance("closing")} />
+    </>
+  );
+}
+
 function Ribbon({ state: s, rules: c }: { state: State; rules: Config }) {
   const items = [
     { d: "A" as District, name: "Presentation", value: `${fmt(s.taskProgress)} / ${c.taskGoal} pts`, note: s.taskResult === null ? `due end of day ${c.taskDeadlineDay}` : s.taskResult ? "met" : "missed" },
@@ -920,7 +1110,7 @@ function Ribbon({ state: s, rules: c }: { state: State; rules: Config }) {
       <span className="ribbon-blocks"><b>{c.dailyBudget}</b> time blocks / day</span>
       {items.map((x) => (
         <span key={x.name} style={{ "--voice": districtInfo[x.d].color } as CSSProperties}>
-          <i aria-hidden="true">{districtInfo[x.d].symbol}</i>
+          <i aria-hidden="true"><VoiceIcon d={x.d} size={22} /></i>
           <small>{x.name}</small>
           <b>{x.value}</b>
           <em>{x.note}</em>

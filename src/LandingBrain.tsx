@@ -25,7 +25,7 @@ const zoneColor = Object.fromEntries(
 ) as Record<District, THREE.Color>;
 
 let glowTexture: THREE.Texture | null = null;
-function glowMap() {
+export function glowMap() {
   if (glowTexture) return glowTexture;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 64;

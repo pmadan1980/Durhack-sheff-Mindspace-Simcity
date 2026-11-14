@@ -1159,9 +1159,6 @@
   gap: 18px;
   margin-top: 8px;
 }
-.journey-stage.scene-comparison {
-  display: none;
-}
 .voice-icon .vi-eyes,
 .voice-icon .vi-mouth {
   transform-box: fill-box;
@@ -1258,4 +1255,240 @@
   border: 1px solid #3d4580;
   border-radius: 8px;
   padding: 6px 8px;
+}
+/* ---------- Faces + words instead of symbols ---------- */
+.tokens {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.token-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--voice) 18%, #12163a);
+  border: 1px solid color-mix(in srgb, var(--voice) 55%, transparent);
+  font-size: 12px;
+  color: #eef0ff;
+}
+.token-chip b {
+  color: var(--voice);
+}
+.tray-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ledger tbody th button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.resource-ribbon i {
+  display: grid;
+  place-items: center;
+}
+/* ---------- Debate readability ---------- */
+.now-speaking {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--voice) 14%, #12163a);
+  border: 1px solid var(--voice);
+  margin-bottom: 10px;
+}
+.now-speaking > span:nth-child(2) {
+  flex: 1;
+  display: grid;
+}
+.now-speaking small {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #b9bfe8;
+}
+.now-speaking b {
+  font-size: 18px;
+  color: var(--voice);
+}
+.transcript-box {
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: 4px;
+}
+.transcript-box li.line-current {
+  background: #222a63;
+  box-shadow: inset 4px 0 0 var(--voice), 0 0 0 1px var(--voice);
+  animation: line-in 0.4s ease-out;
+}
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .transcript-box li.line-current {
+    animation: none;
+  }
+}
+.jump-latest {
+  margin: -4px 0 10px;
+  border: 1px solid #3d4580;
+  border-radius: 999px;
+  background: #1b2048;
+  color: #e3e6ff;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+/* In the guided story the stage panel owns the screen; room panels wait for Explore. */
+.mind-universe .workspace-staged > :not(.away-banner) {
+  display: none;
+}
+.unfold {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: grid;
+  gap: 8px;
+}
+.unfold li {
+  display: grid;
+  grid-template-columns: 56px 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border-radius: 12px;
+  background: #12163a;
+  opacity: 0.75;
+}
+.unfold li.unfold-current {
+  opacity: 1;
+  box-shadow: 0 0 0 1px #c9a9ff;
+  animation: line-in 0.4s ease-out;
+}
+.unfold-day {
+  font-size: 13px;
+  padding-top: 2px;
+}
+.unfold-world {
+  display: grid;
+  gap: 3px;
+  font-size: 13px;
+}
+.unfold-world small {
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  color: #a9b4ff;
+}
+.unfold-world.world-b small {
+  color: #ffb3d1;
+}
+.unfold-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.unfold-stats em {
+  font-style: normal;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #c8cbef;
+  font-size: 12px;
+}
+.mix-control {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+.mix-control button {
+  border: 1px solid #3d4580;
+  border-radius: 999px;
+  background: #151a3d;
+  color: #e3e6ff;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.mix-control button[aria-pressed="true"] {
+  background: #e7d6ff;
+  color: #241a35;
+}
+.mix-control input {
+  accent-color: #c9a9ff;
+}
+.mix-readout {
+  text-align: center;
+  font-size: 13px;
+  color: #b9bfe8;
+  margin: 4px 0 10px;
+}
+.layer-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--voice);
+  font-weight: 700;
+}
+.layer-table th small {
+  display: block;
+  font-weight: 400;
+  color: #a9b0e0;
+  font-size: 11px;
+}
+@media (max-width: 860px) {
+  .unfold li {
+    grid-template-columns: 1fr;
+  }
+}
+.mind-universe .orb-label:not(.orb-label-open) {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  opacity: 0;
+}
+.mind-universe .orb-label.orb-label-open {
+  font-size: 12px;
+  padding: 7px 12px;
+}
+.memory-day-label {
+  display: block;
+  white-space: nowrap;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #c9d3ff;
+  background: #0d1029cc;
+  border: 1px solid #343b74;
+  border-radius: 999px;
+  padding: 3px 10px;
+  pointer-events: none;
+}
+.resume-bar {
+  top: auto;
+  bottom: 104px;
+}
+/* Desktop room polish: one heading per room, and the resume control clear of every panel. */
+.resume-bar {
+  top: 84px;
+  bottom: auto;
+  right: 38px;
+  left: auto;
+  transform: none;
+  padding: 6px 6px 6px 14px;
+  font-size: 13px;
+}
+.room-observatory .location-heading,
+.room-parallel .location-heading {
+  display: none;
+}
+.mind-universe .room-memory .workspace {
+  max-height: 170px;
+}
+.transcript-box {
+  max-height: clamp(140px, calc(100vh - 600px), 280px);
 }
