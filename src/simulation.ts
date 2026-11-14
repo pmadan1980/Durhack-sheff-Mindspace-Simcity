@@ -1,0 +1,438 @@
+export const districts = ["A", "C", "D", "R"] as const;
+export type District = (typeof districts)[number];
+export type Allocation = Record<District, number>;
+export const districtInfo = {
+  A: {
+    name: "Achievement",
+    color: "#f1ac79",
+    symbol: "△",
+    voice: "Melody",
+    purpose: "Turn time into progress.",
+  },
+  C: {
+    name: "Connection",
+    color: "#e9b9c9",
+    symbol: "◎",
+    voice: "Call & response",
+    purpose: "Make room for someone.",
+  },
+  D: {
+    name: "Discovery",
+    color: "#b9b2ed",
+    symbol: "✧",
+    voice: "Counterline",
+    purpose: "Find a different way.",
+  },
+  R: {
+    name: "Recovery",
+    color: "#9ac8b7",
+    symbol: "≈",
+    voice: "Bass & sustain",
+    purpose: "Replenish what is shared.",
+  },
+};
+export const config = {
+  modelVersion: "mindspace-v1",
+  dailyBudget: 6,
+  energyCap: 12,
+  taskGoal: 12,
+  taskDeadlineDay: 3,
+  connectionGoal: 3,
+  connectionLastOpenDay: 1,
+  methodCap: 1.6,
+  residentCount: 24,
+  campaignSeconds: 18,
+  voteSeconds: 4,
+  resolutionSeconds: 8,
+  daySeconds: 30,
+  speedOptions: [0.5, 1, 2],
+  maxDays: 14,
+  historyLimit: 14,
+  seed: 4242,
+  achievementRate: 2,
+  energyFactorFloor: 0.25,
+  energyFactorRange: 0.75,
+  connectionRate: 1.5,
+  recoveryRate: 1.5,
+  achievementEnergyCost: 0.9,
+  connectionEnergyCost: 0.4,
+  discoveryEnergyCost: 0.7,
+  discoveryMethodGain: 0.05,
+};
+export type Config = typeof config;
+export interface Setup {
+  scenarioId: string;
+  energy: number;
+  taskProgress: number;
+  energyCap: number;
+}
+export const scenarios = [
+  {
+    id: "presentation-and-friend",
+    label: "The presentation & the visit",
+    taskProgress: 0,
+    summary:
+      "Your presentation is in three days. A friend is in town for just one. How will your world make room for both?",
+  },
+  {
+    id: "almost-prepared",
+    label: "A little head start",
+    taskProgress: 10,
+    summary:
+      "The same three-day deadline. The same one-day visit. But this time, most of your presentation is already done.",
+  },
+];
+export const judgeSetup: Setup = {
+  scenarioId: scenarios[0].id,
+  energy: 8,
+  taskProgress: 0,
+  energyCap: 12,
+};
+export interface Policy {
+  id: string;
+  name: string;
+  description: string;
+  allocation: Allocation;
+}
+export const policies: Policy[] = [
+  {
+    id: "prepare",
+    name: "Prepare now",
+    description: "Give the presentation a head start.",
+    allocation: { A: 4, C: 0, D: 0, R: 2 },
+  },
+  {
+    id: "visit",
+    name: "Protect the visit",
+    description: "Progress, with room for your friend.",
+    allocation: { A: 2, C: 2, D: 0, R: 2 },
+  },
+  {
+    id: "method",
+    name: "Improve the method",
+    description: "Trade a little today for a different tomorrow.",
+    allocation: { A: 2, C: 1, D: 2, R: 1 },
+  },
+];
+export interface State {
+  id: string;
+  day: number;
+  energy: number;
+  taskProgress: number;
+  connectionProgress: number;
+  method: number;
+  taskResult: boolean | null;
+  connectionResult: boolean | null;
+}
+export interface Activity {
+  energyFactor: number;
+  taskGain: number;
+  connectionGain: number;
+  energyDelta: number;
+  restored: number;
+  methodGain: number;
+  connectionOpen: boolean;
+}
+export interface Resident {
+  id: string;
+  district: District;
+  weights: Allocation;
+}
+// Archetypes are mixed across district identities; membership never determines a vote.
+const archetypes: Allocation[] = [
+  { A: 0.65, C: 0.12, D: 0.08, R: 0.15 },
+  { A: 0.15, C: 0.65, D: 0.05, R: 0.15 },
+  { A: 0.2, C: 0.1, D: 0.6, R: 0.1 },
+  { A: 0.18, C: 0.17, D: 0.1, R: 0.55 },
+  { A: 0.35, C: 0.35, D: 0.1, R: 0.2 },
+  { A: 0.4, C: 0.15, D: 0.3, R: 0.15 },
+];
+export function residents(c: Config): Resident[] {
+  return Array.from({ length: c.residentCount }, (_, i) => ({
+    id: `resident-${i + 1}`,
+    district: districts[Math.floor(i / 6) % 4],
+    weights: { ...archetypes[(i + c.seed) % archetypes.length] },
+  }));
+}
+export function validateSetup(s: Setup): string | null {
+  if (!scenarios.some((x) => x.id === s.scenarioId))
+    return "Choose an authored scenario.";
+  if (!Number.isFinite(s.energyCap) || s.energyCap <= 0 || s.energyCap > 30)
+    return "Energy capacity must be greater than 0 and at most 30.";
+  if (!Number.isFinite(s.energy) || s.energy < 0 || s.energy > s.energyCap)
+    return "Starting energy must be between 0 and its capacity.";
+  if (
+    !Number.isFinite(s.taskProgress) ||
+    s.taskProgress < 0 ||
+    s.taskProgress > 30
+  )
+    return "Starting progress must be between 0 and 30.";
+  return null;
+}
+export function validatePolicy(p: Policy, c: Config): string | null {
+  const values = districts.map((d) => p.allocation[d]);
+  if (values.some((v) => !Number.isFinite(v) || !Number.isInteger(v) || v < 0))
+    return "Use nonnegative whole time blocks.";
+  return values.reduce((a, b) => a + b, 0) === c.dailyBudget
+    ? null
+    : `Allocate exactly ${c.dailyBudget} time blocks.`;
+}
+export function createWorld(setup: Setup): { state: State; rules: Config } {
+  const error = validateSetup(setup);
+  if (error) throw new Error(error);
+  return {
+    rules: { ...config, energyCap: setup.energyCap },
+    state: {
+      id: "world-a",
+      day: 1,
+      energy: setup.energy,
+      taskProgress: setup.taskProgress,
+      connectionProgress: 0,
+      method: 1,
+      taskResult: null,
+      connectionResult: null,
+    },
+  };
+}
+const clamp = (x: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, x));
+export function externalEvent(day: number) {
+  if (day === 2)
+    return {
+      id: "a-quiet-morning",
+      name: "A quiet morning",
+      detail:
+        "An unexpected free moment adds 1 energy token before the election.",
+      energy: 1,
+    };
+  if (day === 3)
+    return {
+      id: "the-final-stretch",
+      name: "The final stretch",
+      detail: "Last-minute logistics use 1 energy token before the election.",
+      energy: -1,
+    };
+  return {
+    id: `ordinary-${day}`,
+    name: day === 1 ? "A friend arrives" : "An open day",
+    detail:
+      day === 1
+        ? "The visit is available today only. The presentation is due at the end of day 3."
+        : "No external resource changes today.",
+    energy: 0,
+  };
+}
+export function actionState(state: State, c: Config): State {
+  return {
+    ...state,
+    energy: clamp(
+      state.energy + externalEvent(state.day).energy,
+      0,
+      c.energyCap,
+    ),
+  };
+}
+export function proposalsForDay(day: number, source = policies): Policy[] {
+  return source.map((p) => ({
+    ...p,
+    allocation:
+      day > config.connectionLastOpenDay
+        ? { ...p.allocation, A: p.allocation.A + p.allocation.C, C: 0 }
+        : { ...p.allocation },
+  }));
+}
+export function forecast(s: State, p: Policy, c: Config): Activity {
+  const a = p.allocation;
+  const energyFactor =
+    c.energyFactorFloor + (c.energyFactorRange * s.energy) / c.energyCap;
+  const cost =
+    c.achievementEnergyCost * a.A +
+    c.connectionEnergyCost * a.C +
+    c.discoveryEnergyCost * a.D;
+  const delta = c.recoveryRate * a.R - cost;
+  return {
+    energyFactor,
+    taskGain: c.achievementRate * a.A * energyFactor * s.method,
+    connectionGain:
+      s.day <= c.connectionLastOpenDay ? c.connectionRate * a.C : 0,
+    energyDelta: clamp(s.energy + delta, 0, c.energyCap) - s.energy,
+    // Audible/visual replenishment is the contribution that survives the cap.
+    restored:
+      clamp(s.energy + delta, 0, c.energyCap) -
+      clamp(s.energy - cost, 0, c.energyCap),
+    methodGain:
+      Math.min(c.methodCap, s.method + c.discoveryMethodGain * a.D) - s.method,
+    connectionOpen: s.day <= c.connectionLastOpenDay,
+  };
+}
+export interface Ballot {
+  resident: Resident;
+  utilities: number[];
+  choice: number;
+  signals: Allocation[];
+}
+export interface Election {
+  counts: number[];
+  winner: number;
+  ballots: Ballot[];
+  tied: boolean;
+}
+export function elect(s: State, ps: Policy[], c: Config): Election {
+  if (ps.length === 0 || ps.some((p) => validatePolicy(p, c)))
+    throw new Error("Election needs valid proposals.");
+  const safe = (value: number, bound: number) =>
+    bound > 0 ? value / bound : 0;
+  const signals = ps.map((p) => {
+    const f = forecast(s, p, c);
+    return {
+      A: safe(
+        Math.min(f.taskGain, Math.max(0, c.taskGoal - s.taskProgress)),
+        c.achievementRate *
+          c.dailyBudget *
+          (c.energyFactorFloor + c.energyFactorRange) *
+          c.methodCap,
+      ),
+      C: safe(
+        Math.min(
+          f.connectionGain,
+          Math.max(0, c.connectionGoal - s.connectionProgress),
+        ),
+        c.connectionRate * c.dailyBudget,
+      ),
+      D: safe(f.methodGain, c.discoveryMethodGain * c.dailyBudget),
+      R: safe(f.energyDelta, c.recoveryRate * c.dailyBudget),
+    };
+  });
+  const ballots = residents(c).map((resident) => {
+    const utilities = signals.map((sig) =>
+      districts.reduce((sum, d) => sum + resident.weights[d] * sig[d], 0),
+    );
+    return {
+      resident,
+      utilities,
+      signals,
+      choice: utilities.indexOf(Math.max(...utilities)),
+    };
+  });
+  const counts = ps.map((_, i) => ballots.filter((b) => b.choice === i).length);
+  const highest = Math.max(...counts);
+  return {
+    ballots,
+    counts,
+    winner: counts.indexOf(highest),
+    tied: counts.filter((v) => v === highest).length > 1,
+  };
+}
+export interface Round {
+  id: string;
+  before: State;
+  start: State;
+  after: State;
+  policies: Policy[];
+  election: Election;
+  policy: Policy;
+  activity: Activity;
+  external: ReturnType<typeof externalEvent>;
+  manual: boolean;
+  events: {
+    id: string;
+    label: string;
+    amount: number;
+    unit: string;
+    district: District;
+  }[];
+}
+export function resolve(
+  state: State,
+  ps: Policy[],
+  c: Config,
+  intervention?: string,
+): Round {
+  if (state.day > c.maxDays)
+    throw new Error("This world has reached its last day.");
+  const start = actionState(state, c);
+  const election = elect(start, ps, c);
+  const policy = intervention
+    ? ps.find((p) => p.id === intervention)
+    : ps[election.winner];
+  if (!policy || validatePolicy(policy, c))
+    throw new Error("Choose a valid proposal.");
+  const activity = forecast(start, policy, c);
+  const after: State = {
+    ...start,
+    day: start.day + 1,
+    energy: start.energy + activity.energyDelta,
+    taskProgress: start.taskProgress + activity.taskGain,
+    connectionProgress: start.connectionProgress + activity.connectionGain,
+    method: start.method + activity.methodGain,
+    taskResult:
+      start.taskResult ??
+      (start.day === c.taskDeadlineDay
+        ? start.taskProgress + activity.taskGain >= c.taskGoal
+        : null),
+    connectionResult:
+      start.connectionResult ??
+      (start.day === c.connectionLastOpenDay
+        ? start.connectionProgress + activity.connectionGain >= c.connectionGoal
+        : null),
+  };
+  const id = `${state.id}-day-${state.day}${intervention ? `-branch-${intervention}` : ""}`;
+  return structuredClone({
+    id,
+    before: state,
+    start,
+    after,
+    policies: ps,
+    election,
+    policy,
+    activity,
+    external: externalEvent(state.day),
+    manual: intervention !== undefined,
+    events: [
+      {
+        id: `${id}-task`,
+        label: "Presentation advanced",
+        amount: activity.taskGain,
+        unit: "points",
+        district: "A",
+      },
+      {
+        id: `${id}-visit`,
+        label: activity.connectionOpen
+          ? "Visit advanced"
+          : "Visit window closed",
+        amount: activity.connectionGain,
+        unit: "points",
+        district: "C",
+      },
+      {
+        id: `${id}-method`,
+        label: "Method acquired for future days",
+        amount: activity.methodGain,
+        unit: "×",
+        district: "D",
+      },
+      {
+        id: `${id}-energy`,
+        label: "Net shared energy change",
+        amount: activity.energyDelta,
+        unit: "tokens",
+        district: "R",
+      },
+    ],
+  } satisfies Round);
+}
+export function branch(round: Round, policyId: string, c: Config): Round {
+  const result = resolve(
+    structuredClone(round.before),
+    round.policies,
+    c,
+    policyId,
+  );
+  result.after.id = "world-b";
+  return result;
+}
+export const fmt = (n: number, places = 1) =>
+  Number(n.toFixed(places)).toLocaleString("en-GB", {
+    maximumFractionDigits: places,
+  });
