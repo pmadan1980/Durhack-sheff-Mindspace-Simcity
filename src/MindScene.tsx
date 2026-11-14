@@ -14,6 +14,8 @@ import {
 import { memoriesFor, type Memory } from "./memories";
 import { locations, type Location } from "./MindUniverse";
 import { audio } from "./audio";
+import { planAccent, type Cue } from "./journey";
+import LandingBrain, { landingView } from "./LandingBrain";
 
 type Point = [number, number, number];
 const places: Record<Location, Point> = {
@@ -37,7 +39,7 @@ const gateways = {
   observatory: [23, -5, -80],
   symphony: [0, -4, -85],
 } satisfies Partial<Record<Location, Point>>;
-const colors = ["#ffd36c", "#ff8fab", "#70bfff", "#a5ecc0"];
+const colors = districts.map((d) => districtInfo[d].color);
 
 function Glow({ color = "#b3a1ff", size = 5, position = [0, 0, 0] as Point }) {
   const map = useMemo(() => {
@@ -65,129 +67,22 @@ function Glow({ color = "#b3a1ff", size = 5, position = [0, 0, 0] as Point }) {
   );
 }
 
-function Brain({ reduced }: { reduced: boolean }) {
-  const brain = useRef<THREE.Group>(null);
-  const folds = useMemo(
-    () =>
-      [-1, 1].flatMap((side) =>
-        Array.from({ length: 13 }, (_, row) => {
-          const latitude = -0.95 + row * 0.15;
-          return Array.from({ length: 100 }, (_, i) => {
-            const a = (i / 99) * Math.PI * 2;
-            const wave =
-              0.08 * Math.sin(a * 8 + row * 1.4) +
-              0.04 * Math.sin(a * 17 - row);
-            const r = Math.sqrt(1 - latitude * latitude);
-            return [
-              side * 1.28 + Math.cos(a) * r * 1.65,
-              latitude * 2.2 + wave,
-              Math.sin(a) * r * 1.55 + wave,
-            ] as Point;
-          });
-        }),
-      ),
-    [],
-  );
-  useFrame(({ pointer, clock, camera }, dt) => {
-    if (!brain.current) return;
-    brain.current.visible = camera.position.z > -8;
-    const t = reduced ? 0 : clock.elapsedTime;
-    brain.current.rotation.y = THREE.MathUtils.damp(
-      brain.current.rotation.y,
-      reduced ? -0.18 : pointer.x * 0.25 - 0.18,
-      3,
-      dt,
-    );
-    brain.current.rotation.x = THREE.MathUtils.damp(
-      brain.current.rotation.x,
-      reduced ? 0.12 : -0.1 * pointer.y + 0.12,
-      3,
-      dt,
-    );
-    brain.current.position.y = 0.45 + Math.sin(t * 0.55) * 0.13;
-  });
-  return (
-    <group ref={brain} rotation={[0.12, -0.18, -0.1]} scale={0.78}>
-      {[-1, 1].map((side) => (
-        <mesh
-          key={side}
-          position={[side * 1.28, 0, 0]}
-          scale={[1.65, 2.2, 1.55]}
-        >
-          <sphereGeometry args={[1, 40, 32]} />
-          <meshPhysicalMaterial
-            color={side < 0 ? "#a589e9" : "#f4a0b7"}
-            metalness={0.3}
-            roughness={0.28}
-            clearcoat={1}
-            transparent
-            opacity={0.26}
-            depthWrite={false}
-            emissive="#8853ac"
-            emissiveIntensity={0.2}
-          />
-        </mesh>
-      ))}
-      {folds.map((points, i) => (
-        <Line
-          key={i}
-          points={points}
-          color={colors[Math.floor(i / 7) % 4]}
-          lineWidth={2.4}
-          transparent
-          opacity={0.66}
-        />
-      ))}
-      {Array.from({ length: 40 }, (_, i) => {
-        const a = i * 2.399,
-          y = Math.sin(i * 3.17) * 1.9;
-        const r = Math.sqrt(Math.max(0, 1 - (y / 2.2) ** 2));
-        return (
-          <group
-            key={i}
-            position={[
-              (i % 2 ? 1 : -1) * 1.28 + Math.cos(a) * 1.65 * r,
-              y,
-              Math.sin(a) * 1.55 * r,
-            ]}
-          >
-            <mesh>
-              <sphereGeometry args={[0.045, 8, 6]} />
-              <meshBasicMaterial color={colors[i % 4]} />
-            </mesh>
-            {i % 4 === 0 && <Glow color={colors[i % 4]} size={0.8} />}
-          </group>
-        );
-      })}
-      <mesh position={[0, -2.1, -0.3]} rotation={[0, 0, -0.1]}>
-        <capsuleGeometry args={[0.35, 1, 5, 12]} />
-        <meshStandardMaterial color="#9471b6" transparent opacity={0.5} />
-      </mesh>
-      <Glow color="#b590ff" size={11} position={[0, 0, -2]} />
-      <Sparkles
-        count={65}
-        scale={[9, 6, 6]}
-        size={2}
-        speed={reduced ? 0 : 0.25}
-        color="#ecb7ff"
-      />
-    </group>
-  );
-}
-
 function CameraJourney({
   entered,
   room,
   reduced,
   onArrive,
+  framing = 0,
 }: {
   entered: boolean;
   room: Location;
   reduced: boolean;
   onArrive: () => void;
+  framing?: number;
 }) {
   const { camera, size, invalidate } = useThree();
   const target = useRef(new THREE.Vector3());
+  const viewOffset = useRef([0, 0, 0]);
   const journey = useRef(0);
   const arrived = useRef(false);
   const wasEntered = useRef(false);
@@ -207,7 +102,7 @@ function CameraJourney({
     const p = places[room];
     const narrow = size.width < 700;
     let dest: Point = !entered
-      ? [0, 0.8, narrow ? 16 : 12.5]
+      ? [0, 0.6, (narrow ? 13.5 : 9.6) + landingView.zoom]
       : room === "hub"
         ? [0, 16, narrow ? -14 : -23]
         : room === "parallel"
@@ -221,7 +116,32 @@ function CameraJourney({
             p[1] + (room === "parallel" ? -2.8 : narrow ? -2 : 1.2),
             p[2],
           ]
-      : [0, 0.3, 0];
+      : [narrow ? 0 : 0.9, narrow ? 0.3 : 0.25, 0];
+    // Guided scenes keep the 3D action centred in the space beside the opaque story panel.
+    let offsetX = 0,
+      offsetY = 0;
+    if (entered && framing && room !== "parallel") {
+      if (narrow) {
+        offsetY = Math.max(0, Math.min(size.height * 0.52, size.height - 260) / 2 - 80);
+      } else {
+        const panel = (framing > 1 ? Math.min(900, size.width * 0.62) : Math.min(540, size.width * 0.44)) + 24;
+        offsetX = panel / 2;
+        const k = Math.min(2.4, size.width / Math.max(320, size.width - panel));
+        const lookAt = new THREE.Vector3(...look);
+        const away = new THREE.Vector3(...dest).sub(lookAt);
+        if (room !== "hub") away.set(0, 5.2, 11);
+        away.multiplyScalar(room === "hub" ? Math.min(k, 1.5) : k * 0.85);
+        dest = lookAt.clone().add(away).toArray() as Point;
+        if (room !== "hub") look = [p[0], p[1] + 1, p[2]];
+      }
+    }
+    if (offsetX !== viewOffset.current[0] || offsetY !== viewOffset.current[1] || size.width !== viewOffset.current[2]) {
+      viewOffset.current = [offsetX, offsetY, size.width];
+      const perspective = camera as THREE.PerspectiveCamera;
+      if (offsetX || offsetY)
+        perspective.setViewOffset(size.width, size.height, offsetX, offsetY, size.width, size.height);
+      else perspective.clearViewOffset();
+    }
     // A brief approach crosses the actual neural shell before emerging at the hub.
     if (entered && !reduced && journey.current < 1.15) {
       dest = [0, 0.2, -2];
@@ -279,111 +199,301 @@ function Platform({ color, radius = 3.4 }: { color: string; radius?: number }) {
   );
 }
 
+const shapes = (() => {
+  const star = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 ? 0.27 : 0.6,
+      a = Math.PI / 2 + (i * Math.PI) / 5;
+    if (i) star.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    else star.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const heart = new THREE.Shape();
+  heart.moveTo(0, -0.5);
+  heart.bezierCurveTo(-0.25, -0.32, -0.6, -0.12, -0.6, 0.16);
+  heart.bezierCurveTo(-0.6, 0.42, -0.36, 0.55, -0.2, 0.5);
+  heart.bezierCurveTo(-0.08, 0.47, 0, 0.36, 0, 0.3);
+  heart.bezierCurveTo(0, 0.36, 0.08, 0.47, 0.2, 0.5);
+  heart.bezierCurveTo(0.36, 0.55, 0.6, 0.42, 0.6, 0.16);
+  heart.bezierCurveTo(0.6, -0.12, 0.25, -0.32, 0, -0.5);
+  const extrude = (shape: THREE.Shape, depth: number, bevel: number) => {
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth,
+      bevelEnabled: true,
+      bevelThickness: bevel,
+      bevelSize: bevel * 0.8,
+      bevelSegments: 8,
+      curveSegments: 24,
+    });
+    g.center();
+    return g;
+  };
+  const drop = new THREE.LatheGeometry(
+    Array.from({ length: 24 }, (_, i) => {
+      const t = i / 23;
+      return new THREE.Vector2(
+        Math.sin(Math.PI * t) ** 1.3 * 0.5 * (1 - t * 0.35),
+        -0.5 + t * 1.15,
+      );
+    }),
+    32,
+  );
+  return {
+    A: extrude(star, 0.14, 0.12),
+    C: extrude(heart, 0.24, 0.16),
+    D: drop,
+  };
+})();
+
+function Eyes({ sleepy, gap = 0.17 }: { sleepy?: boolean; gap?: number }) {
+  return (
+    <group>
+      {[-1, 1].map((side) =>
+        sleepy ? (
+          <mesh key={side} position={[side * gap, 0, 0.02]} rotation={[0, 0, Math.PI]}>
+            <torusGeometry args={[0.07, 0.022, 6, 16, Math.PI]} />
+            <meshBasicMaterial color="#1d1b3a" />
+          </mesh>
+        ) : (
+          <group key={side} position={[side * gap, 0, 0]}>
+            <mesh scale={[1, 1.15, 0.55]}>
+              <sphereGeometry args={[0.13, 20, 16]} />
+              <meshBasicMaterial color="#ffffff" />
+            </mesh>
+            <mesh position={[0, -0.01, 0.06]} scale={[1, 1.1, 0.5]}>
+              <sphereGeometry args={[0.075, 16, 12]} />
+              <meshBasicMaterial color="#1d1b3a" />
+            </mesh>
+            <mesh position={[0.03, 0.035, 0.1]}>
+              <sphereGeometry args={[0.025, 8, 6]} />
+              <meshBasicMaterial color="#ffffff" />
+            </mesh>
+          </group>
+        ),
+      )}
+    </group>
+  );
+}
+
+export interface Reaction {
+  d: District;
+  kind: "cheer" | "sigh";
+  key: number;
+}
+const face: Record<District, { eyes: [number, number, number]; gap: number; mouth: [number, number, number]; arms: [number, number, number, number] }> = {
+  // eye y/z, mouth y/z/width, arm [idle angle, speaking angle, y, x]
+  A: { eyes: [0.02, 0.16, 0], gap: 0.14, mouth: [-0.16, 0.2, 0.06], arms: [-0.9, -2.3, -0.1, 0.42] },
+  C: { eyes: [0.08, 0.27, 0], gap: 0.17, mouth: [-0.12, 0.3, 0.09], arms: [-1.2, -1.9, -0.05, 0.62] },
+  D: { eyes: [-0.05, 0.36, 0], gap: 0.15, mouth: [-0.27, 0.38, 0.05], arms: [-0.6, -1.6, -0.15, 0.42] },
+  R: { eyes: [0.02, 0.34, 0], gap: 0.15, mouth: [-0.14, 0.34, 0.05], arms: [-0.5, -1.2, -0.12, 0.62] },
+};
+
+/** Cute original voice characters: a spark-star, a heart blob, a teardrop wisp, a sleepy cloud. */
 function Persona({
   d,
   energy,
   favored,
   reduced,
+  speaking = false,
+  listening = false,
+  yaw = 0,
+  reaction,
 }: {
   d: District;
   energy: number;
   favored: boolean;
   reduced: boolean;
+  speaking?: boolean;
+  listening?: boolean;
+  yaw?: number;
+  reaction?: Reaction | null;
 }) {
   const ref = useRef<THREE.Group>(null);
+  const body = useRef<THREE.Group>(null);
+  const eyes = useRef<THREE.Group>(null);
+  const mouth = useRef<THREE.Mesh>(null);
+  const smile = useRef<THREE.Mesh>(null);
+  const arms = useRef<(THREE.Mesh | null)[]>([]);
+  const sparkle = useRef<THREE.Mesh>(null);
+  const react = useRef<{ kind: Reaction["kind"]; start: number | null } | null>(null);
   const index = districts.indexOf(d);
   const color = colors[index];
+  const tired = energy < 0.25;
+  const f = face[d];
+  const blinkSeed = useMemo(() => 2.6 + index * 0.9, [index]);
+  useEffect(() => {
+    if (reaction && reaction.d === d) react.current = { kind: reaction.kind, start: null };
+  }, [reaction, d]);
   useFrame(({ clock }, dt) => {
-    if (!ref.current) return;
-    const t = reduced ? 0 : clock.elapsedTime;
-    ref.current.position.y =
-      0.8 + Math.sin(t * (favored ? 3 : 1.3) + index) * (favored ? 0.16 : 0.06);
-    ref.current.rotation.z =
-      Math.sin(t * 1.1 + index) * (energy < 0.25 ? 0.12 : 0.04);
-    ref.current.scale.lerp(
-      new THREE.Vector3(1, energy < 0.25 ? 0.8 : 1, 1),
-      Math.min(1, dt * 4),
-    );
+    if (!ref.current || !body.current) return;
+    const t = clock.elapsedTime;
+    const still = reduced;
+    const k = still ? 1 : Math.min(1, dt * 5);
+    ref.current.position.y = THREE.MathUtils.lerp(ref.current.position.y, 0.8 + (speaking ? 0.35 : 0), k);
+    ref.current.rotation.y = THREE.MathUtils.lerp(ref.current.rotation.y, yaw, k);
+    // Breathing, a talking sway, and listener nods: gentle, never a constant bounce.
+    const breath = still ? 1 : 1 + Math.sin(t * 1.6 + index) * 0.015;
+    let sx = breath,
+      sy = (tired ? 0.88 : 1) * breath,
+      rx = 0,
+      ry = 0,
+      rz = 0,
+      hop = 0;
+    if (!still && speaking) rz = Math.sin(t * 2.6) * 0.05;
+    if (!still && listening) rx = Math.max(0, Math.sin(t * 2.2 + index * 1.3)) ** 2 * 0.12;
+    // Brief personality reactions to plan edits and results.
+    const r = react.current;
+    if (r && !still) {
+      if (r.start === null) r.start = t;
+      const p = (t - r.start) / 1.4;
+      if (p >= 1) react.current = null;
+      else {
+        const bump = Math.sin(Math.PI * p);
+        if (r.kind === "cheer") {
+          if (d === "A") {
+            ry = p * Math.PI * 2;
+            hop = bump * 0.45;
+          } else if (d === "C") {
+            sx *= 1 + Math.sin(p * Math.PI * 3) * 0.18 * (1 - p);
+            sy *= 1 - Math.sin(p * Math.PI * 3) * 0.15 * (1 - p);
+            hop = bump * 0.2;
+          } else if (d === "D") {
+            rz = Math.sin(p * Math.PI * 2) * 0.35;
+            hop = bump * 0.25;
+          } else {
+            sy *= 1 + bump * 0.22;
+            hop = bump * 0.15;
+          }
+        } else {
+          rx = bump * (d === "R" ? -0.25 : 0.35);
+          sy *= 1 - bump * 0.1;
+          rz = d === "D" ? bump * 0.3 : rz;
+        }
+      }
+    }
+    body.current.scale.set(sx, sy, sx);
+    body.current.rotation.set(rx, ry, rz);
+    body.current.position.y = hop;
+    // Blinks every few seconds, desynchronised per voice.
+    if (eyes.current) {
+      const cycle = (t + index * 1.7) % blinkSeed;
+      eyes.current.scale.y = !still && cycle < 0.13 ? 0.12 : 1;
+    }
+    // Simple mouth movement while this voice's text is active (not audio lip-sync).
+    if (mouth.current && smile.current) {
+      mouth.current.visible = speaking || (r?.kind === "sigh" && d === "R");
+      smile.current.visible = !mouth.current.visible;
+      const talk = still ? 0.6 : 0.35 + Math.abs(Math.sin(t * 9 + Math.sin(t * 3.7) * 2)) * 0.75;
+      mouth.current.scale.set(1, talk, 0.35);
+    }
+    arms.current.forEach((arm, i) => {
+      if (!arm) return;
+      const side = i ? 1 : -1;
+      const wave = speaking && !still ? Math.sin(t * 3 + i * 1.4) * 0.35 : 0;
+      const cheer = r?.kind === "cheer" && !still ? -0.8 : 0;
+      const target = side * ((speaking ? f.arms[1] : f.arms[0]) + wave + cheer);
+      arm.rotation.z = THREE.MathUtils.lerp(arm.rotation.z, target, k);
+    });
+    if (sparkle.current) {
+      sparkle.current.rotation.y = still ? 0 : t * 2;
+      sparkle.current.scale.setScalar(r?.kind === "cheer" && d === "D" && !still ? 2.2 : 1);
+    }
   });
+  const glow = speaking ? 0.85 : favored ? 0.45 : 0.25;
+  const material = (
+    <meshPhysicalMaterial
+      color={color}
+      emissive={color}
+      emissiveIntensity={glow}
+      roughness={0.35}
+      clearcoat={1}
+      clearcoatRoughness={0.3}
+    />
+  );
   return (
     <group ref={ref} position={[0, 0.8, 1.25]}>
-      <mesh
-        scale={
-          d === "C"
-            ? [1.1, 0.95, 0.8]
-            : d === "D"
-              ? [0.9, 1.1, 0.8]
-              : [1, 1, 0.8]
-        }
-      >
-        {d === "A" ? (
-          <coneGeometry args={[0.58, 1.25, 5, 1]} />
-        ) : d === "D" ? (
-          <octahedronGeometry args={[0.65, 0]} />
-        ) : (
-          <capsuleGeometry args={[0.46, d === "R" ? 0.5 : 0.25, 6, 16]} />
+      <group ref={body}>
+        {d === "A" && (
+          <>
+            <mesh geometry={shapes.A}>{material}</mesh>
+            {[-1, 1].map((side) => (
+              <mesh key={side} position={[side * 0.15, 0.2, 0.2]} rotation={[0, 0, side * -0.4]}>
+                <boxGeometry args={[0.16, 0.035, 0.02]} />
+                <meshBasicMaterial color="#1d1b3a" />
+              </mesh>
+            ))}
+          </>
         )}
-        <meshStandardMaterial
-          color={color}
-          roughness={0.25}
-          metalness={0.15}
-          emissive={color}
-          emissiveIntensity={favored ? 0.3 : 0.08}
-        />
-      </mesh>
-      {[-1, 1].map((side) => (
-        <group key={side}>
-          <mesh position={[side * 0.19, 0.15, 0.43]}>
-            <sphereGeometry args={[0.1, 12, 8]} />
-            <meshBasicMaterial color="#fbf8ff" />
-          </mesh>
-          <mesh position={[side * 0.18, 0.15 + (favored ? 0.02 : 0), 0.515]}>
-            <sphereGeometry args={[0.048, 10, 8]} />
-            <meshBasicMaterial color="#21162e" />
-          </mesh>
-          <mesh
-            position={[side * 0.47, -0.08, 0.12]}
-            rotation={[0, 0, side * (favored ? -0.8 : 0.45)]}
-          >
-            <capsuleGeometry args={[0.075, 0.3, 4, 8]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          <mesh position={[side * 0.2, -0.65, 0.05]} scale={[1, 0.55, 1.4]}>
-            <sphereGeometry args={[0.14, 10, 8]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          {d === "C" && (
-            <mesh position={[side * 0.4, 0.5, -0.05]}>
-              <sphereGeometry args={[0.25, 12, 8]} />
-              <meshStandardMaterial color="#ed91bf" />
+        {d === "C" && (
+          <>
+            <mesh geometry={shapes.C}>{material}</mesh>
+            {[-1, 1].map((side) => (
+              <mesh key={side} position={[side * 0.32, -0.08, 0.26]} scale={[1, 0.6, 0.3]}>
+                <sphereGeometry args={[0.08, 12, 8]} />
+                <meshBasicMaterial color="#ff3d6e" transparent opacity={0.55} />
+              </mesh>
+            ))}
+          </>
+        )}
+        {d === "D" && (
+          <>
+            <mesh geometry={shapes.D} rotation={[0, 0, 0.08]}>{material}</mesh>
+            <mesh position={[-0.15, 0.13, 0.4]} rotation={[0, 0, 0.35]}>
+              <boxGeometry args={[0.14, 0.03, 0.02]} />
+              <meshBasicMaterial color="#1d1b3a" />
             </mesh>
-          )}
-          {d === "D" && (
-            <mesh position={[side * 0.19, 0.15, 0.5]}>
-              <torusGeometry args={[0.14, 0.025, 6, 16]} />
-              <meshBasicMaterial color="#293b83" />
+            <mesh ref={sparkle} position={[0.32, 0.78, 0]}>
+              <octahedronGeometry args={[0.09, 0]} />
+              <meshBasicMaterial color="#ffffff" />
             </mesh>
-          )}
+            <Glow color="#ffffff" size={0.6} position={[0.32, 0.78, 0]} />
+          </>
+        )}
+        {d === "R" && (
+          <>
+            {(
+              [
+                [0, 0, 0, 0.42],
+                [-0.36, -0.1, 0, 0.3],
+                [0.36, -0.1, 0, 0.3],
+                [-0.16, 0.26, -0.05, 0.28],
+                [0.2, 0.22, -0.05, 0.3],
+              ] as const
+            ).map(([x, y, z, r], i) => (
+              <mesh key={i} position={[x, y, z]} scale={[1, 0.9, 0.8]}>
+                <sphereGeometry args={[r, 24, 18]} />
+                {material}
+              </mesh>
+            ))}
+            <mesh position={[0.5, 0.55, 0]} rotation={[0, 0, 0.6]}>
+              <torusGeometry args={[0.12, 0.05, 8, 20, Math.PI * 1.2]} />
+              <meshStandardMaterial color="#fff6c2" emissive="#fff6c2" emissiveIntensity={0.8} />
+            </mesh>
+          </>
+        )}
+        <group ref={eyes} position={[0, f.eyes[0], f.eyes[1]]}>
+          <Eyes sleepy={d === "R" && !speaking} gap={f.gap} />
         </group>
-      ))}
-      <mesh
-        position={[0, -0.12, 0.47]}
-        rotation={[0, 0, energy < 0.25 ? 0 : Math.PI]}
-      >
-        <torusGeometry args={[0.12, 0.025, 6, 16, Math.PI]} />
-        <meshBasicMaterial color="#35213c" />
-      </mesh>
-      {d === "R" && (
-        <mesh
-          position={[0, 0.65, 0]}
-          rotation={[0, 0, -0.5]}
-          scale={[1, 0.35, 0.6]}
-        >
-          <sphereGeometry args={[0.32, 12, 8]} />
-          <meshStandardMaterial color="#d2ffba" />
+        <mesh ref={smile} position={[0, f.mouth[0], f.mouth[1]]} rotation={[0, 0, Math.PI]}>
+          <torusGeometry args={[f.mouth[2], 0.02, 6, 14, Math.PI]} />
+          <meshBasicMaterial color="#1d1b3a" />
         </mesh>
-      )}
-      {favored && <Glow color={color} size={2} position={[0, 0.3, -0.4]} />}
+        <mesh ref={mouth} visible={false} position={[0, f.mouth[0], f.mouth[1]]}>
+          <sphereGeometry args={[f.mouth[2] * 0.9, 14, 10]} />
+          <meshBasicMaterial color="#3a1430" />
+        </mesh>
+        {[-1, 1].map((side, i) => (
+          <mesh
+            key={side}
+            ref={(m) => (arms.current[i] = m)}
+            position={[side * f.arms[3], f.arms[2], 0.05]}
+            rotation={[0, 0, side * f.arms[0]]}
+          >
+            <capsuleGeometry args={[0.06, 0.24, 4, 8]} />
+            {material}
+          </mesh>
+        ))}
+      </group>
+      <Glow color={color} size={speaking ? 3 : 2} position={[0, 0.1, -0.4]} />
     </group>
   );
 }
@@ -623,6 +733,7 @@ function Chamber({
   sounding,
   solo,
   onMemory,
+  cue,
 }: {
   room: Location;
   state: State;
@@ -635,6 +746,43 @@ function Chamber({
   sounding: boolean;
   solo: District | null;
   onMemory: (id: string) => void;
+  cue: Cue | null;
+}) {
+  if (room === "decision" && cue)
+    return (
+      <group position={places.decision}>
+        <GuidedChamber cue={cue} state={state} rules={rules} reduced={reduced} />
+      </group>
+    );
+  return <ChamberRoom {...{ room, state, history, rules, election, phase, voteProgress, reduced, sounding, solo, onMemory, cue }} />;
+}
+
+function ChamberRoom({
+  room,
+  state,
+  history,
+  rules,
+  election,
+  phase,
+  voteProgress,
+  reduced,
+  sounding,
+  solo,
+  onMemory,
+  cue,
+}: {
+  room: Location;
+  state: State;
+  history: Round[];
+  rules: Config;
+  election: Election;
+  phase: string;
+  voteProgress: number;
+  reduced: boolean;
+  sounding: boolean;
+  solo: District | null;
+  onMemory: (id: string) => void;
+  cue: Cue | null;
 }) {
   const rotating = useRef<THREE.Group>(null);
   const pulseStarted = useRef(0);
@@ -789,6 +937,9 @@ function Chamber({
               <group key={d} position={[(i - 1.5) * 1.7, 0, 2]}>
                 <Persona
                   d={d}
+                  speaking={cue?.speaker === d}
+                  listening={!!cue?.speaker && cue.speaker !== d}
+                  reaction={cue?.reactions.find((r) => r.d === d)}
                   energy={state.energy / rules.energyCap}
                   favored={
                     d === "R"
@@ -803,6 +954,9 @@ function Chamber({
                 />
               </group>
             ))}
+          {room === "headquarters" && cue?.thought && (
+            <ThoughtOrb reduced={reduced} />
+          )}
           {room === "headquarters" && (
             <mesh position={[0, 0.65, 1.4]} rotation={[-Math.PI / 2, 0, 0]}>
               <torusGeometry args={[2.7, 0.2, 12, 64, Math.PI]} />
@@ -895,6 +1049,11 @@ export default function MindScene({
   onMemory,
   onArrive,
   onUnavailable,
+  voice,
+  lit,
+  onVoice,
+  onToggle,
+  cue,
 }: {
   entered: boolean;
   room: Location;
@@ -912,6 +1071,11 @@ export default function MindScene({
   onMemory: (id: string) => void;
   onArrive: () => void;
   onUnavailable: () => void;
+  voice: District | null;
+  lit: District[];
+  onVoice: (d: District | null) => void;
+  onToggle: (d: District) => void;
+  cue: Cue | null;
 }) {
   const [hidden, setHidden] = useState(document.hidden);
   useEffect(() => {
@@ -927,19 +1091,36 @@ export default function MindScene({
       frameloop={hidden ? "never" : reduced ? "demand" : "always"}
     >
       <ContextWatch onUnavailable={onUnavailable} />
-      <color attach="background" args={["#100f24"]} />
-      <fog attach="fog" args={["#100f24", 40, 100]} />
+      {entered ? (
+        <>
+          <color attach="background" args={["#0a0b1e"]} />
+          <fog attach="fog" args={["#0a0b1e", 40, 100]} />
+        </>
+      ) : (
+        <>
+          <color attach="background" args={["#070918"]} />
+          <fogExp2 attach="fog" args={["#070918", 0.035]} />
+        </>
+      )}
       <ambientLight intensity={1.5} color="#b5b0e8" />
       <directionalLight position={[5, 12, 8]} intensity={3} color="#fff1df" />
       <directionalLight position={[-8, 4, -4]} intensity={3} color="#bb9bff" />
       <CameraJourney
+        framing={cue ? (cue.scene === "voting" ? 2 : 1) : 0}
         entered={entered}
         room={room}
         reduced={reduced}
         onArrive={onArrive}
       />
       <Suspense fallback={null}>
-        <Brain reduced={reduced} />
+        <LandingBrain
+          entered={entered}
+          reduced={reduced}
+          voice={voice}
+          lit={lit}
+          onVoice={onVoice}
+          onToggle={onToggle}
+        />
         {entered && (
           <>
             <Sparkles
@@ -989,7 +1170,7 @@ export default function MindScene({
                   color={locations[place].color}
                   reduced={reduced}
                 />
-                {room === "hub" && (
+                {room === "hub" && !cue && (
                   <group position={gateways[place]}>
                     <mesh onClick={() => onVisit(place)}>
                       {place === "memory" ? (
@@ -1062,8 +1243,25 @@ export default function MindScene({
                   sounding={sounding}
                   solo={solo}
                   onMemory={onMemory}
+                  cue={cue}
                 />
               )}
+            {cue?.flights && (
+              <Flights
+                key={cue.flights.key}
+                allocation={cue.flights.allocation}
+                reduced={reduced}
+              />
+            )}
+            {cue?.focus && (
+              <group position={places[cue.focus]}>
+                <Glow color={districtInfo[cue.focus].color} size={14} position={[0, 2, 0]} />
+                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.3, 0]}>
+                  <ringGeometry args={[3.6, 3.9, 64]} />
+                  <meshBasicMaterial color={districtInfo[cue.focus].color} toneMapped={false} side={THREE.DoubleSide} />
+                </mesh>
+              </group>
+            )}
             {room === "parallel" && (
               <group position={places.parallel}>
                 {(["a", "b"] as const).map((branch, i) => (
@@ -1107,5 +1305,189 @@ export default function MindScene({
         )}
       </Suspense>
     </Canvas>
+  );
+}
+
+const personaSeats = districts.map((_, i) => {
+  const a = -0.95 + (i * 1.9) / 3;
+  return [Math.sin(a) * 3.3, -2.2 + (1 - Math.cos(a)) * 1.6] as const;
+});
+
+/** Guided Decision Chamber: voices around a holographic plan table, live vote columns and resident orbs. */
+function GuidedChamber({
+  cue,
+  state,
+  rules,
+  reduced,
+}: {
+  cue: Cue;
+  state: State;
+  rules: Config;
+  reduced: boolean;
+}) {
+  const ring = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (ring.current && !reduced) ring.current.rotation.y = clock.elapsedTime * 0.05;
+  });
+  const speakerSeat = cue.speaker ? personaSeats[districts.indexOf(cue.speaker)] : null;
+  const total = cue.votes.length || rules.residentCount;
+  return (
+    <group>
+      <Platform color="#ffc531" radius={5.6} />
+      <mesh position={[0, 0.45, 0.2]}>
+        <cylinderGeometry args={[1.9, 1.6, 0.35, 48]} />
+        <meshStandardMaterial color="#2b2a52" metalness={0.4} roughness={0.35} />
+      </mesh>
+      <mesh position={[0, 0.64, 0.2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[1.85, 48]} />
+        <meshBasicMaterial color="#7f8cff" transparent opacity={0.25} toneMapped={false} />
+      </mesh>
+      {cue.plans.map((p, i) => {
+        const accent = districtInfo[planAccent(p, cue.plans)].color;
+        const count = cue.counts?.[i] ?? 0;
+        const height = 0.05 + (count / total) * 2.6;
+        const won = cue.winner === i;
+        let k = 0;
+        return (
+          <group key={p.id} position={[(i - 1) * 1.1, 0.66, 0.2]}>
+            <mesh position={[0, height / 2, 0]}>
+              <cylinderGeometry args={[0.28, 0.28, height, 24]} />
+              <meshStandardMaterial
+                color={accent}
+                emissive={accent}
+                emissiveIntensity={won ? 1.2 : 0.45}
+                transparent
+                opacity={0.75}
+              />
+            </mesh>
+            {districts.flatMap((d) =>
+              Array.from({ length: p.allocation[d] }, () => {
+                const y = height + 0.14 + k++ * 0.19;
+                return (
+                  <mesh key={`${d}${k}`} position={[0, y, 0]} rotation={[0, 0.6, 0]}>
+                    <boxGeometry args={[0.16, 0.16, 0.16]} />
+                    <meshStandardMaterial color={districtInfo[d].color} emissive={districtInfo[d].color} emissiveIntensity={0.5} />
+                  </mesh>
+                );
+              }),
+            )}
+            {won && <Glow color={accent} size={3} position={[0, height, 0]} />}
+          </group>
+        );
+      })}
+      <group ref={ring}>
+        {Array.from({ length: total }, (_, i) => {
+          const a = (i / total) * Math.PI * 2;
+          const choice = cue.votes[i];
+          const c = choice === null || choice === undefined ? "#3a3f6e" : districtInfo[planAccent(cue.plans[choice], cue.plans)].color;
+          return (
+            <mesh key={i} position={[Math.cos(a) * 4.9, 0.55, Math.sin(a) * 4.9]}>
+              <sphereGeometry args={[0.17, 14, 10]} />
+              <meshStandardMaterial color={c} emissive={c} emissiveIntensity={choice === null || choice === undefined ? 0.05 : 0.9} />
+            </mesh>
+          );
+        })}
+      </group>
+      {districts.map((d, i) => {
+        const [x, z] = personaSeats[i];
+        const speaking = cue.speaker === d;
+        const target = speakerSeat && !speaking ? speakerSeat : [0, 0.2];
+        // Listeners glance toward the speaker but keep their faces readable.
+        const yaw = speaking ? 0 : THREE.MathUtils.clamp(Math.atan2(target[0] - x, target[1] - z), -0.75, 0.75);
+        return (
+          <group key={d} position={[x, 0, z - 1.25]}>
+            <Persona
+              d={d}
+              energy={state.energy / rules.energyCap}
+              favored={false}
+              reduced={reduced}
+              speaking={speaking}
+              listening={!!cue.speaker && !speaking}
+              yaw={yaw}
+              reaction={cue.reactions.find((r) => r.d === d)}
+            />
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+function ThoughtOrb({ reduced }: { reduced: boolean }) {
+  const orb = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (orb.current) orb.current.scale.setScalar(1 + (reduced ? 0 : Math.sin(clock.elapsedTime * 2) * 0.05));
+  });
+  return (
+    <group>
+      <group ref={orb} position={[0, 3.6, 0.5]}>
+        <mesh>
+          <icosahedronGeometry args={[0.55, 2]} />
+          <meshStandardMaterial color="#f1e6ff" emissive="#c9a9ff" emissiveIntensity={1.1} />
+        </mesh>
+        <Glow color="#d9c2ff" size={4} />
+      </group>
+      {districts.map((d, i) => (
+        <Line
+          key={d}
+          points={[
+            [0, 3.6, 0.5],
+            [(i - 1.5) * 1.1, 2.6, 1.6],
+            [(i - 1.5) * 1.7, 1.2, 3.25],
+          ]}
+          color={districtInfo[d].color}
+          lineWidth={2.5}
+          transparent
+          opacity={0.85}
+        />
+      ))}
+    </group>
+  );
+}
+
+/** Today's six time blocks fly from the hub to the districts that received them. */
+function Flights({ allocation, reduced }: { allocation: Record<District, number>; reduced: boolean }) {
+  const blocks = useMemo(
+    () =>
+      districts.flatMap((d) =>
+        Array.from({ length: allocation[d] }, (_, k) => ({ d, k })),
+      ).map((b, i) => {
+        const to = places[b.d];
+        return {
+          ...b,
+          i,
+          curve: new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(places.hub[0], 2.5, places.hub[2]),
+            new THREE.Vector3((places.hub[0] + to[0]) / 2, 8, (places.hub[2] + to[2]) / 2),
+            new THREE.Vector3(to[0] + (b.k - 1) * 0.7, 3.4, to[2] + 1.5),
+          ),
+        };
+      }),
+    [allocation],
+  );
+  const refs = useRef<(THREE.Mesh | null)[]>([]);
+  const start = useRef<number | null>(null);
+  useFrame(({ clock }) => {
+    if (start.current === null) start.current = clock.elapsedTime;
+    const t = clock.elapsedTime - start.current;
+    blocks.forEach((b) => {
+      const m = refs.current[b.i];
+      if (!m) return;
+      const p = reduced ? 1 : Math.min(1, Math.max(0, (t - b.i * 0.35) / 1.6));
+      const eased = 1 - (1 - p) ** 3;
+      m.position.copy(b.curve.getPoint(eased));
+      m.rotation.set(eased * 4, eased * 6, 0);
+      m.visible = reduced || t > b.i * 0.35;
+    });
+  });
+  return (
+    <group>
+      {blocks.map((b) => (
+        <mesh key={`${b.d}${b.k}`} ref={(m) => (refs.current[b.i] = m)}>
+          <boxGeometry args={[0.55, 0.55, 0.55]} />
+          <meshStandardMaterial color={districtInfo[b.d].color} emissive={districtInfo[b.d].color} emissiveIntensity={0.8} />
+        </mesh>
+      ))}
+    </group>
   );
 }

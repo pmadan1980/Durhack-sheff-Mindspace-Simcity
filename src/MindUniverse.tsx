@@ -38,8 +38,19 @@ import {
   type State,
 } from "./simulation";
 import { memoriesFor } from "./memories";
+import { voices } from "./dialogue";
+import VoiceIcon from "./VoiceIcon";
+import type { Cue } from "./journey";
+import {
+  cerebellumPx,
+  cerebrumPx,
+  stemPx,
+  svgPath,
+  zonePx,
+} from "./brainShape";
 import WorldArt from "./WorldArt";
 import "./universe.css";
+import "./journey.css";
 
 export const locations = {
   hub: {
@@ -85,28 +96,28 @@ export const locations = {
     color: "#a5ecc0",
   },
   A: {
-    title: "Ambition",
+    title: "Achievement",
     subtitle: "A little higher. A little closer.",
     symbol: "△",
-    color: "#ffd36c",
+    color: "#ffc531",
   },
   C: {
-    title: "Emotion",
+    title: "Connection",
     subtitle: "The things that make it matter.",
-    symbol: "♡",
-    color: "#ff8fab",
+    symbol: "◎",
+    color: "#ff7f8f",
   },
   D: {
-    title: "Logic",
+    title: "Discovery",
     subtitle: "There is always another way.",
-    symbol: "◇",
-    color: "#70bfff",
+    symbol: "✧",
+    color: "#4a90ff",
   },
   R: {
-    title: "Wellbeing",
+    title: "Recovery",
     subtitle: "Even a universe needs to breathe.",
-    symbol: "❋",
-    color: "#a5ecc0",
+    symbol: "≈",
+    color: "#5fe3b4",
   },
 } as const;
 export type Location = keyof typeof locations;
@@ -142,6 +153,15 @@ interface Props {
   pair: { a: Round; b: Round } | null;
   setup: Setup;
   onSetup: (setup: Setup) => void;
+  guided: boolean;
+  staged: boolean;
+  cue: Cue | null;
+  inProgress: boolean;
+  onRelease: (setup: Setup, text: string) => void;
+  onFree: () => void;
+  onResume: () => void;
+  stage: ReactNode;
+  free: boolean;
   onApply: (setup: Setup) => void;
   onInspect: (day: number) => void;
   onHelp: () => void;
@@ -180,7 +200,14 @@ export default function MindUniverse(props: Props) {
   const [arrived, setArrived] = useState(false);
   const [thought, setThought] = useState("");
   const [thoughtResult, setThoughtResult] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const [memoryId, setMemoryId] = useState<string | null>(null);
+  const [voice, setVoice] = useState<District | null>(null);
+  const [lit, setLit] = useState<District[]>([]);
+  const toggleVoice = (d: District) => {
+    setVoice(d);
+    setLit((l) => (l.includes(d) ? l.filter((x) => x !== d) : [...l, d]));
+  };
   const memories = memoriesFor(history, rules);
   const memory = memories.find((m) => m.id === memoryId);
   const district = districts.includes(room as District)
@@ -211,13 +238,21 @@ export default function MindUniverse(props: Props) {
   function submitThought(e: React.FormEvent) {
     e.preventDefault();
     const text = thought.trim();
-    if (!text || validateSetup(setup)) return;
+    if (!text) {
+      setThoughtResult("Write a sentence first, or pick one of the prompts.");
+      document.getElementById("thought")?.focus();
+      return;
+    }
+    if (validateSetup(setup)) return;
+    if (props.inProgress && !confirming) {
+      setConfirming(true);
+      return;
+    }
+    setConfirming(false);
+    setThoughtResult("");
     const next = setupForThought(text, setup);
     onSetup(next);
-    onApply(next);
-    setThoughtResult(
-      `Thought received. ${next.taskProgress ? "A head start: 10 presentation points." : "A fresh presentation: 0 points."} Energy: ${next.energy} tokens. Your four voices are ready.`,
-    );
+    props.onRelease(next, text);
   }
   const motionProps = reduced
     ? { initial: false as const }
@@ -253,41 +288,7 @@ export default function MindUniverse(props: Props) {
                   }}
                 />
               ) : (
-                <svg
-                  viewBox="0 0 600 400"
-                  role="img"
-                  aria-label="An illuminated two-hemisphere brain"
-                >
-                  <defs>
-                    <radialGradient id="brain-light">
-                      <stop stopColor="#d9b5ff" />
-                      <stop offset="1" stopColor="#58436e" />
-                    </radialGradient>
-                  </defs>
-                  {[-1, 1].map((side) => (
-                    <g
-                      key={side}
-                      transform={`translate(${300 + side * 85},180)`}
-                    >
-                      <ellipse
-                        rx="100"
-                        ry="130"
-                        fill="url(#brain-light)"
-                        stroke="#d6b4ff"
-                        strokeWidth="2"
-                      />
-                      {Array.from({ length: 8 }, (_, i) => (
-                        <path
-                          key={i}
-                          d={`M -60 ${-85 + i * 24} Q -20 ${-125 + i * 24} 0 ${-85 + i * 24} T 70 ${-75 + i * 24}`}
-                          fill="none"
-                          stroke={i % 2 ? "#ffd3e5" : "#a3c9ff"}
-                          strokeWidth="4"
-                        />
-                      ))}
-                    </g>
-                  ))}
-                </svg>
+                <FlatBrain voice={voice} onVoice={setVoice} onToggle={toggleVoice} />
               )}
             </div>
           ) : (
@@ -317,6 +318,11 @@ export default function MindUniverse(props: Props) {
                   onMemory={openMemory}
                   onArrive={() => setArrived(true)}
                   onUnavailable={() => setUnavailable(true)}
+                  cue={props.cue}
+                  voice={entered ? null : voice}
+                  lit={lit}
+                  onVoice={setVoice}
+                  onToggle={toggleVoice}
                 />
               </Suspense>
             </SceneBoundary>
@@ -396,35 +402,76 @@ export default function MindUniverse(props: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, transition: { duration: reduced ? 0 : 0.5 } }}
             >
-              <div className="entrance-heading">
+              <div className="entrance-copy">
                 <span className="cosmic-eyebrow">
-                  A LITTLE WONDER. A WHOLE WORLD WITHIN.
+                  A FICTIONAL MODEL OF COMPETING PRIORITIES
                 </span>
                 <h1>MINDSPACE</h1>
-              </div>
-              <div className="entrance-action">
-                <p>
-                  An entire universe lives
-                  <br className="narrow-only" /> inside your mind.
+                <p className="entrance-lede">
+                  Four voices share one mind, six blocks of time a day and one
+                  energy reserve. Twenty-four residents vote on how to spend
+                  them.
                 </p>
+                <div className="entrance-dilemma">
+                  <span>AN EXAMPLE DILEMMA</span>
+                  Your presentation is due in {rules.taskDeadlineDay} days.
+                  Your friend is only here today.
+                </div>
                 <button className="enter-mind" onClick={props.onEnter}>
                   ENTER YOUR MIND <ArrowRight size={18} />
                 </button>
                 <span className="entrance-hint">
-                  <i /> MOVE YOUR CURSOR. FOLLOW YOUR CURIOSITY.
+                  <i /> DRAG TO ROTATE · SCROLL TO ZOOM · CHOOSE A VOICE
                 </span>
               </div>
+              <aside
+                className={`voice-card ${voice ? "has-voice" : ""}`}
+                style={
+                  voice
+                    ? ({ "--voice": districtInfo[voice].color } as CSSProperties)
+                    : undefined
+                }
+                aria-live="polite"
+              >
+                {voice ? (
+                  <>
+                    <span className="voice-card-symbol">
+                      <VoiceIcon d={voice} size={56} speaking />
+                    </span>
+                    <span className="cosmic-eyebrow">
+                      {districtInfo[voice].name.toUpperCase()} ·{" "}
+                      {voices[voice].guards.toUpperCase()}
+                    </span>
+                    <b>“{voices[voice].line}”</b>
+                    <small>{voices[voice].wants}</small>
+                  </>
+                ) : (
+                  <>
+                    <span className="cosmic-eyebrow">FOUR VOICES</span>
+                    <b>Hover a region of the brain, or pick a voice below.</b>
+                    <small>Each lobe is a voice. Tap one to light its memory orb.</small>
+                  </>
+                )}
+              </aside>
+              <div className="voice-legend" role="group" aria-label="The four voices">
+                {districts.map((d) => (
+                  <button
+                    key={d}
+                    aria-pressed={lit.includes(d)}
+                    className={voice === d ? "legend-active" : ""}
+                    onMouseEnter={() => setVoice(d)}
+                    onFocus={() => setVoice(d)}
+                    onClick={() => toggleVoice(d)}
+                    style={{ "--voice": districtInfo[d].color } as CSSProperties}
+                  >
+                    <VoiceIcon d={d} size={26} />
+                    {districtInfo[d].name}
+                  </button>
+                ))}
+              </div>
               <div className="entrance-foot">
-                <span>ORIGINAL WORLDS · HUMAN POSSIBILITIES</span>
+                <span>A COMPOSITION OF PRIORITIES · DURHACK 2026</span>
                 <span>A FICTIONAL MODEL. NOT A DIAGNOSIS.</span>
-              </div>
-              <div className="orbital-word word-ambition">
-                △ &nbsp; AMBITION
-              </div>
-              <div className="orbital-word word-emotion">♡ &nbsp; EMOTION</div>
-              <div className="orbital-word word-logic">◇ &nbsp; LOGIC</div>
-              <div className="orbital-word word-wellbeing">
-                ❋ &nbsp; WELLBEING
               </div>
             </motion.main>
           ) : (
@@ -435,6 +482,7 @@ export default function MindUniverse(props: Props) {
               animate={{ opacity: 1 }}
               transition={{ delay: reduced || flat ? 0 : 1.3, duration: 0.6 }}
             >
+              {!props.staged && (
               <div className="location-heading">
                 <span className="cosmic-eyebrow">
                   {room === "hub"
@@ -460,7 +508,8 @@ export default function MindUniverse(props: Props) {
                     : "Following the neural pathways…"}
                 </span>
               </div>
-              {room === "hub" && (
+              )}
+              {room === "hub" && !props.guided && (
                 <div className="hub-invitation">
                   <button onClick={() => visit("headquarters")}>
                     <Sparkles size={17} />
@@ -472,7 +521,7 @@ export default function MindUniverse(props: Props) {
                   </button>
                 </div>
               )}
-              {room === "headquarters" && (
+              {room === "headquarters" && !props.staged && (
                 <motion.section
                   key="thought"
                   className="thought-console cosmic-panel glass"
@@ -516,6 +565,7 @@ export default function MindUniverse(props: Props) {
                         Almost done, feeling tired
                       </button>
                     </div>
+                    {props.free && (
                     <details className="thought-assumptions">
                       <summary>
                         Starting assumptions <Settings2 size={13} />
@@ -606,6 +656,7 @@ export default function MindUniverse(props: Props) {
                         Apply assumptions & reset world
                       </button>
                     </details>
+                    )}
                     {validateSetup(setup) && (
                       <p role="alert">{validateSetup(setup)}</p>
                     )}
@@ -615,18 +666,32 @@ export default function MindUniverse(props: Props) {
                         memories.
                       </p>
                     )}
+                    {confirming && (
+                      <p className="thought-confirm" role="alert">
+                        This replaces your current local world, including its
+                        days and memories. Release it anyway?{" "}
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() => setConfirming(false)}
+                        >
+                          Keep current world
+                        </button>
+                      </p>
+                    )}
                     <button
                       className="cosmic-primary"
                       type="submit"
-                      disabled={!thought.trim() || !!validateSetup(setup)}
+                      disabled={!!validateSetup(setup)}
                     >
-                      RELEASE THOUGHT <ArrowRight size={15} />
+                      {confirming ? "REPLACE WORLD & RELEASE" : "RELEASE THOUGHT"}{" "}
+                      <ArrowRight size={15} />
                     </button>
                   </form>
                   <p className="thought-disclosure">
-                    Local, not AI. “Almost done” sets 10 progress; “tired” sets
-                    up to 4 energy. Other thoughts start the authored
-                    deadline-and-visit dilemma. Nothing is sent or saved.
+                    Local, not AI. A few literal keywords prefill answers
+                    (“almost done”, “tired”); next you confirm the deadline,
+                    any visit, progress and energy. Nothing is sent or saved.
                   </p>
                   {thoughtResult && (
                     <div className="thought-response" role="status">
@@ -634,15 +699,13 @@ export default function MindUniverse(props: Props) {
                       <p>{thoughtResult}</p>
                     </div>
                   )}
-                  <button
-                    className="journey-link"
-                    onClick={() => visit("decision")}
-                  >
-                    Hear your voices decide <ArrowRight size={15} />
+                  <button className="journey-link" onClick={props.onFree}>
+                    Or skip the story and explore freely{" "}
+                    <ArrowRight size={15} />
                   </button>
                 </motion.section>
               )}
-              {district && (
+              {district && !props.staged && (
                 <motion.section
                   key={`district-${district}`}
                   className="district-story cosmic-panel glass"
@@ -719,7 +782,7 @@ export default function MindUniverse(props: Props) {
                   </button>
                 </motion.section>
               )}
-              {room === "memory" && (
+              {room === "memory" && !props.staged && (
                 <section className="memory-shelf cosmic-panel glass">
                   <span className="cosmic-eyebrow">
                     ONLY MOMENTS THAT REALLY HAPPENED
@@ -800,6 +863,16 @@ export default function MindUniverse(props: Props) {
               >
                 {props.children}
               </div>
+              {props.stage}
+              {props.guided && !props.staged && (
+                <div className="resume-bar glass" role="status">
+                  Journey paused while you explore. Nothing advances.
+                  <button className="cosmic-primary" onClick={props.onResume}>
+                    Resume journey <ArrowRight size={14} />
+                  </button>
+                </div>
+              )}
+              {!props.guided && (
               <div className="universe-transport glass">
                 <span>
                   <i className={props.playing ? "transport-pulse" : ""} />
@@ -843,6 +916,7 @@ export default function MindUniverse(props: Props) {
                   <small> ENERGY</small>
                 </span>
               </div>
+              )}
               <nav
                 className="journey-dock glass"
                 aria-label="Travel through the mind"
@@ -925,7 +999,7 @@ export default function MindUniverse(props: Props) {
                   </div>
                 </section>
               )}
-              {room === "hub" && (
+              {room === "hub" && !props.guided && (
                 <div
                   className="hub-districts"
                   aria-label="District destinations"
@@ -945,7 +1019,7 @@ export default function MindUniverse(props: Props) {
                   ))}
                 </div>
               )}
-              {room !== "hub" && (
+              {room !== "hub" && !props.staged && (
                 <button className="back-to-hub" onClick={() => visit("hub")}>
                   <Home size={13} /> RETURN TO HUB
                 </button>
@@ -961,5 +1035,63 @@ export default function MindUniverse(props: Props) {
         </span>
       </div>
     </MotionConfig>
+  );
+}
+
+function FlatBrain({
+  voice,
+  onVoice,
+  onToggle,
+}: {
+  voice: District | null;
+  onVoice: (d: District | null) => void;
+  onToggle: (d: District) => void;
+}) {
+  return (
+    <svg
+      className="flat-brain"
+      viewBox="120 90 700 540"
+      role="img"
+      aria-label="A side-view brain with four coloured voice regions"
+    >
+      <defs>
+        <clipPath id="flat-cerebrum">
+          <path d={svgPath(cerebrumPx)} />
+        </clipPath>
+        <filter id="flat-blur">
+          <feGaussianBlur stdDeviation="38" />
+        </filter>
+      </defs>
+      <path d={svgPath(stemPx)} fill="#1c2350" stroke="#8f9cff" strokeWidth="2" />
+      <path d={svgPath(cerebellumPx)} fill="#1c2350" stroke="#8f9cff" strokeWidth="2" />
+      <path d={svgPath(cerebrumPx)} fill="#141a3a" />
+      <g clipPath="url(#flat-cerebrum)" filter="url(#flat-blur)">
+        {districts.map((d) => (
+          <circle
+            key={d}
+            cx={zonePx[d][0]}
+            cy={zonePx[d][1]}
+            r={voice === d ? 150 : 130}
+            fill={districtInfo[d].color}
+            opacity={voice && voice !== d ? 0.25 : 0.55}
+          />
+        ))}
+      </g>
+      <path d={svgPath(cerebrumPx)} fill="none" stroke="#b9c4ff" strokeWidth="2" />
+      {districts.map((d) => (
+        <circle
+          key={d}
+          cx={zonePx[d][0]}
+          cy={zonePx[d][1]}
+          r="12"
+          fill={districtInfo[d].color}
+          stroke="#fff"
+          strokeWidth="3"
+          style={{ cursor: "pointer" }}
+          onMouseEnter={() => onVoice(d)}
+          onClick={() => onToggle(d)}
+        />
+      ))}
+    </svg>
   );
 }
