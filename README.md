@@ -6,7 +6,8 @@
 
 Built for **DurHack 2026**, around the theme of **composition**.
 
-![MINDSPACE's interactive brain world and four inner voices](docs/images/mindspace-world.png)
+<img width="1853" height="985" alt="image" src="https://github.com/user-attachments/assets/2c37e3c6-83ae-45e4-a19f-fe63ba341218" />
+
 
 ## The problem
 
