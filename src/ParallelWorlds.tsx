@@ -116,11 +116,11 @@ function PlanComparison({ a, b, rules, familyTime }: Pick<Props, "a" | "b" | "ru
       <div className="compare-outcomes">
         <h3>{changes.length ? "What changed" : "Both plans reach the same outcome"}</h3>
         <table>
-          <thead><tr><th scope="col">Resource</th><th scope="col">Original</th><th scope="col">Alternative</th></tr></thead>
+          <thead><tr><th scope="col">Resource</th><th scope="col">Chosen plan</th><th scope="col">What if</th></tr></thead>
           <tbody>{stats.map(stat => <tr key={stat.district} data-changed={stat.changed}>
             <th scope="row"><span><VoiceIcon d={stat.district} size={21} />{familyTime && stat.district === "C" ? "Family time" : stat.label}</span></th>
             {([stat.a, stat.b]).map((value, index) => <td key={index}>
-              {value.text}{value.result !== null && <small>{value.result ? "Met" : "Missed"}</small>}
+              <strong>{value.text}</strong>{value.result !== null && <small data-result={value.result ? "met" : "missed"}>{value.result ? "Met" : "Missed"}</small>}
             </td>)}
           </tr>)}</tbody>
         </table>

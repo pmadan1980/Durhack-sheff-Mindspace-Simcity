@@ -49,3 +49,6 @@
 }
 @media(prefers-reduced-motion:reduce) { .plan-progress i,.time-slot { transition:none; } }
 .scenario-guided .scenario-card-description{font-size:13px;line-height:1.5;color:#c7c5da;margin:0}.scenario-guided.scene-intervention .plan-preview{grid-template-columns:1fr}.scenario-guided.scene-intervention .plan-list{align-items:stretch}
+
+.scene-consequences .day-playback{margin:18px 0}.scene-consequences .day-playback .everyday-scene{height:auto;aspect-ratio:3/2;min-height:0}.scene-consequences .stage-action{position:static;margin-top:16px;background:none;padding-bottom:8px}
+.scene-consequences .day-playback .playback-scene{width:min(100%,34vh);margin:0 auto}.scene-consequences .day-playback .playback-outcome{margin:8px 0;font-size:13px}.scene-consequences .day-playback .playback-controls{position:relative;top:auto}

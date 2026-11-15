@@ -63,3 +63,22 @@
 }
 
 .clay-layer { grid-template-rows:minmax(0,1fr); grid-template-columns:minmax(0,1fr); }
+
+/* Keep the results table within the dark comparison palette. */
+.parallel-cinema .compare-outcomes{padding:20px;border:1px solid #bba6cc26;background:#241c2d;overflow-x:auto}
+.parallel-cinema .compare-outcomes h3{margin:0 0 16px;color:#f6edf7;font-size:23px}
+.parallel-cinema .compare-outcomes table{width:100%;min-width:410px;border-collapse:collapse;table-layout:fixed;background:transparent;color:#eee7f5}
+.parallel-cinema .compare-outcomes th,.parallel-cinema .compare-outcomes td{background:transparent;color:#eee7f5;padding:14px 16px;border:0;text-transform:none;letter-spacing:0;text-align:left;vertical-align:middle}
+.parallel-cinema .compare-outcomes thead th{background:#30263a;color:#c5b8d3;font:600 11px/1.4 Arial,sans-serif;letter-spacing:.8px;text-transform:uppercase}
+.parallel-cinema .compare-outcomes thead th:first-child{width:40%;border-radius:8px 0 0 8px}
+.parallel-cinema .compare-outcomes thead th:last-child{border-radius:0 8px 8px 0}
+.parallel-cinema .compare-outcomes tbody tr{border-bottom:1px solid #bba6cc20;border-top:0}
+.parallel-cinema .compare-outcomes tbody tr:last-child{border-bottom:0}
+.parallel-cinema .compare-outcomes tbody th{font-size:13px;font-weight:500;color:#ddd3e7}
+.parallel-cinema .compare-outcomes tbody th>span{gap:9px}
+.parallel-cinema .compare-outcomes td strong{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.parallel-cinema .compare-outcomes tr[data-changed="true"] td{background:#ccb0ed06}
+.parallel-cinema .compare-outcomes td small{margin:5px 0 0 8px;padding:3px 7px;border-radius:5px;font:600 10px/1.4 Arial,sans-serif;background:#8fdaae17;color:#b5e7c6;white-space:nowrap}
+.parallel-cinema .compare-outcomes td small[data-result="missed"]{background:#e69aa31a;color:#efb2ba}
+@media(max-width:600px){.parallel-cinema .compare-outcomes{padding:14px}.parallel-cinema .compare-outcomes th,.parallel-cinema .compare-outcomes td{padding:12px 9px}.parallel-cinema .compare-outcomes td small{display:table;margin:5px 0 0}}
+.plan-playback > .playback-controls{position:relative;top:auto}

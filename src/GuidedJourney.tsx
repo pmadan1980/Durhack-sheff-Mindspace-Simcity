@@ -1,4 +1,5 @@
-import { conversationLine } from "./debateCopy";
+import DayPlayback from "./DayPlayback";
+import { conversationLine,conversationAnswer } from "./debateCopy";
 import DebatePersonas from "./DebatePersonas";
 import { BrainWorld, JourneyCinema } from "./BrainCinema";
 import { introLine } from "./dialogue";
@@ -52,7 +53,6 @@ import {
   type Scene,
 } from "./journey";
 import {
-  answer,
   debate,
   forecasts,
   questions,
@@ -423,11 +423,11 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
         )}
       </div></details>
       <blockquote className="debate-current-line" key={`${shown}:${asked?.line===shown?asked.q:"line"}:${speaker}`}>
-        {asked?.line===shown ? answer(asked.d,asked.q,start,w.proposals,c) : conversationLine(current,start,w.proposals,c)}
+        {asked?.line===shown ? conversationAnswer(asked.d,asked.q,start,w.proposals,c) : conversationLine(current,start,w.proposals,c)}
       </blockquote>
       </div>
       </div>
-      <div className="debate-secondary-tools"><details className="debate-history"><summary>Conversation so far</summary><ol className="transcript">{lines.slice(0,shown+1).map((line,i)=><TranscriptLine key={i} line={line} current={false}/>)}</ol></details>
+      <div className="debate-secondary-tools"><details className="debate-history"><summary>Conversation so far</summary><ol className="transcript">{lines.slice(0,shown+1).map((line,i)=><TranscriptLine key={i} line={{...line,text:conversationLine(line,start,w.proposals,c)}} current={false}/>)}</ol></details>
       <details className="debate-plan-details"><summary>See the plan in this argument</summary>{current.policy !== undefined && <PlanChip policy={w.proposals[current.policy]} f={f[current.policy]} rules={c} />}</details>
       <div className="debate-controls">
         {!soundOn && <button className="text-button" onClick={onSound}>Enable debate sounds</button>}
@@ -698,89 +698,17 @@ function Result({ journey: j, advance, onSpeaker, onReact }: SceneProps) {
 }
 
 function Consequences({ journey: j, advance, dispatch, onFocus, soundOn, onSound, onSolo, solo, onListen, listening }: SceneProps) {
-  const c = j.world.rules;
-  const r = roundFor(j.world.history, j.locked!.day)!;
-  const prior = roundFor(j.world.history, r.before.day - 1);
-  const [focus, setFocus] = useState<District | null>(null);
-  useEffect(() => { onFocus(focus); }, [focus, onFocus]);
-  useEffect(() => () => onFocus(null), [onFocus]);
-  const score = projectScore(r.after, r, prior, c);
-  const allRows: { d: District; name: string; before: string; change: string; after: string; why: string }[] = [
-    {
-      d: "A", name: taskText(c, "Presentation"), before: `${fmt(r.start.taskProgress)}`, change: `+${fmt(r.activity.taskGain)} pts`, after: `${fmt(r.after.taskProgress)} / ${c.taskGoal}`,
-      why: r.after.taskResult !== null
-        ? taskText(c, `The presentation ${r.after.taskResult ? `reached the ${c.taskGoal}-point goal on day ${r.before.day}` : `missed the ${c.taskGoal}-point goal at the deadline`}.`)
-        : `${r.policy.allocation.A} Achievement blocks at ${fmt(r.activity.energyFactor, 2)}× energy and ${fmt(r.start.method, 2)}× method. ${fmt(Math.max(0, c.taskGoal - r.after.taskProgress))} points remain before day ${c.taskDeadlineDay} ends.`,
-    },
-    {
-      d: "C", name: "Visit", before: `${fmt(r.start.connectionProgress)}`, change: r.activity.connectionOpen ? `+${fmt(r.activity.connectionGain)} pts` : "closed", after: `${fmt(r.after.connectionProgress)} / ${c.connectionGoal}`,
-      why: r.after.connectionResult !== null && r.before.day === c.connectionLastOpenDay
-        ? `The window has now closed: target ${r.after.connectionResult ? "met" : "missed"}.`
-        : r.activity.connectionOpen ? `${r.policy.allocation.C} Connection blocks while the visit was open.` : "The window closed earlier. No plan can change it.",
-    },
-    {
-      d: "R", name: "Energy", before: `${fmt(r.before.energy)}`,
-      change: `${r.external.energy ? `${signed(r.external.energy, 0)} event, ` : ""}${signed(r.activity.energyDelta)} activity`,
-      after: `${fmt(r.after.energy)} / ${c.energyCap}`,
-      why: `${r.external.name}: ${r.external.energy ? `${signed(r.external.energy, 0)} token before the vote` : "no change"}. Today's blocks then ${r.activity.energyDelta < 0 ? "used" : "restored"} ${fmt(Math.abs(r.activity.energyDelta))} tokens, kept between 0 and ${c.energyCap}.`,
-    },
-    {
-      d: "D", name: "Method", before: `${fmt(r.start.method, 2)}×`, change: r.activity.methodGain > 0 ? `${signed(r.activity.methodGain, 2)}×` : "no change", after: `${fmt(r.after.method, 2)}×`,
-      why: r.activity.methodGain > 0 ? taskText(c, `Applies to presentation work from day ${r.before.day + 1}, not retroactively.`) : "No Discovery blocks today, so the multiplier holds.",
-    },
-  ];
-  const rows = allRows.filter((row) => row.d !== "C" || c.connectionLastOpenDay > 0);
-  const layers: { d: District; text: string }[] = [
-    { d: "A", text: taskText(c, `Achievement plays the melody: ${score.density.A} note${score.density.A === 1 ? "" : "s"} per bar from today's presentation gain.`) },
-    { d: "C", text: score.density.C ? `Connection adds call and response, from today's visit points.` : c.connectionLastOpenDay ? "Connection is silent: no visit points today." : "Connection is silent: there's no visit in this scenario." },
-    { d: "D", text: score.density.D ? `Discovery's counterline plays because the method was above 1× today.` : "Discovery's counterline joins once a method gain is in effect, from the next day." },
-    { d: "R", text: score.density.R ? `Recovery contributes the sustained bass, from ${fmt(r.activity.restored)} restored energy.` : "Recovery's bass is quiet: nothing was restored after costs." },
-  ];
-  return (
-    <>
-      <span className="cosmic-eyebrow">DAY {r.before.day} · CONSEQUENCES</span>
-      <h2 tabIndex={-1}>What {r.policy.name} changed.</h2>
-      <p className="stage-lede">Select a resource to see why it changed.</p>
-      <table className="ledger">
-        <thead><tr><th>Resource</th><th>Before</th><th>Change</th><th>After</th></tr></thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.d} className={focus === row.d ? "ledger-focus" : ""} style={{ "--voice": districtInfo[row.d].color } as CSSProperties}>
-              <th><button onClick={() => setFocus(focus === row.d ? null : row.d)} aria-expanded={focus === row.d}><VoiceIcon d={row.d} size={18} /> {row.name}</button></th>
-              <td>{row.before}</td><td>{row.change}</td><td>{row.after}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {focus && <p className="ledger-why" style={{ "--voice": districtInfo[focus].color } as CSSProperties}>{rows.find((x) => x.d === focus)!.why}</p>}
-      <div className="music-box">
-        <div className="music-head">
-          <b><Headphones size={15} /> What today sounds like</b>
-          {soundOn ? (
-            <button className="secondary small" onClick={() => onListen(!listening)}>
-              {listening ? <Pause size={13} /> : <Play size={13} />} {listening ? "Pause" : "Hear the composition"}
-            </button>
-          ) : (
-            <button className="secondary small" onClick={onSound}>Enable sound</button>
-          )}
-        </div>
-        <ul>
-          {layers.map((l) => (
-            <li key={l.d} style={{ "--voice": districtInfo[l.d].color } as CSSProperties}>
-              <span>{l.text}</span>
-              <button className="text-button" aria-pressed={solo === l.d} onClick={() => onSolo(solo === l.d ? null : l.d)}>
-                {solo === l.d ? "Unsolo" : "Solo"}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="stage-action split">
-        <button className="text-button" onClick={() => dispatch({ type: "back", from: "consequences" })}><ArrowLeft size={13} /> Back to result</button>
-        <button className="cosmic-primary" onClick={() => advance("consequences")}>Reflect on day {r.before.day} <ArrowRight size={15} /></button>
-      </div>
-    </>
-  );
+  const c=j.world.rules;
+  const r=roundFor(j.world.history,j.locked!.day)!;
+  return <>
+    <span className="cosmic-eyebrow">DAY {r.before.day} · CONSEQUENCES</span>
+    <h2 tabIndex={-1}>How your day played out.</h2>
+    <DayPlayback key={r.id} round={r} rules={c}/>
+    <div className="stage-action split">
+      <button className="text-button" onClick={()=>dispatch({type:"back",from:"consequences"})}><ArrowLeft size={13}/> Back to result</button>
+      <button className="cosmic-primary" onClick={()=>advance("consequences")}>Continue <ArrowRight size={15}/></button>
+    </div>
+  </>;
 }
 
 function Reflection({ journey: j, advance }: SceneProps) {

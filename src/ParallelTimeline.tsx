@@ -71,22 +71,23 @@ interface Props {
   label: string;
   readout: string;
   split?: number;
+  single?: boolean;
 }
 
-export default function ParallelTimeline({ timeline, label, readout, split }: Props) {
+export default function ParallelTimeline({ timeline, label, readout, split, single=false }: Props) {
   const { progress, playing, reduced, seek, toggle } = timeline;
   return <section className="playback-controls" aria-label="Time progression">
     <div className="playback-clock"><span>{label}</span><strong>{readout}</strong></div>
     <div className="playback-scrub">
       <input type="range" min="0" max="100" step="1" value={Math.round(progress * 100)}
-        aria-label="Scrub through both paths" aria-valuetext={readout}
+        aria-label={single?"Scrub through the day":"Scrub through both paths"} aria-valuetext={readout}
         onChange={event => seek(event.target.valueAsNumber / 100)} />
       {split !== undefined && <i style={{ left: `${split * 100}%` }} title="The paths first differ here" />}
     </div>
     {!reduced && <div className="playback-actions">
       <button type="button" className="playback-primary" onClick={toggle}>
         {playing ? <Pause size={14} /> : progress === 1 ? <RotateCcw size={14} /> : <Play size={14} />}
-        {playing ? "Pause" : progress === 1 ? "Replay paths" : progress === 0 ? "Play paths" : "Resume"}
+        {playing ? "Pause" : progress === 1 ? (single?"Replay day":"Replay paths") : progress === 0 ? (single?"Play day":"Play paths") : "Resume"}
       </button>
     </div>}
   </section>;
