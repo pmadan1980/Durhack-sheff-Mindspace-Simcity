@@ -572,8 +572,15 @@ function Broadcast({ journey: j, dispatch, advance }: SceneProps) {
   const notes = commentary(locked, j.revealed).slice(-4);
   const order = useMemo(() => revealOrder(total), [total]);
   const [resident, setResident] = useState<number | null>(null);
+  const profile=useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(resident!==null)profile.current?.scrollIntoView({block:"nearest",behavior:"auto"});},[resident]);
   const shown = new Set(order.slice(0, j.revealed));
   const b = resident !== null && shown.has(resident) ? locked.election.ballots[resident] : null;
+  const signals=locked.election.ballots[0]?.signals;
+  const dominated=signals?.flatMap((values,i)=>{
+    const better=signals.findIndex((other,k)=>k!==i && districts.every(d=>other[d]>=values[d]-1e-10) && districts.some(d=>other[d]>values[d]+1e-10));
+    return better>=0&&locked.election.counts[i]===0?[{plan:locked.proposals[i].name,other:locked.proposals[better].name}]:[];
+  })??[];
   return (
     <>
       <div className="broadcast-head">
@@ -604,16 +611,17 @@ function Broadcast({ journey: j, dispatch, advance }: SceneProps) {
           const on = k < j.revealed;
           return (
             <button key={r} disabled={!on} aria-pressed={resident === r}
-              aria-label={on ? `Resident ${r + 1}: ${locked.proposals[ballot.choice].name}` : `Resident ${r + 1}: not counted yet`}
+              aria-label={on ? `${ballot.resident.name}: ${locked.proposals[ballot.choice].name}` : `${ballot.resident.name}: not counted yet`}
               style={on ? ({ "--plan": districtInfo[planAccent(locked.proposals[ballot.choice], locked.proposals)].color } as CSSProperties) : undefined}
               className={on ? "is-counted" : ""}
               onClick={() => setResident(resident === r ? null : r)}>
-              {on ? ballot.choice + 1 : ""}
+              <span className="resident-initials">{ballot.resident.name.slice(0,2)}</span>{on&&<small className="resident-plan-badge">{ballot.choice+1}</small>}
             </button>
           );
         })}
       </div>
-      {b && <ResidentCard ballot={b} index={resident!} proposals={locked.proposals} />}
+      <div ref={profile}>{b && <ResidentCard ballot={b} index={resident!} proposals={locked.proposals} />}</div>
+      {final&&dominated.length>0&&<details className="election-context"><summary>Why didn’t every plan get votes?</summary>{dominated.map(pair=><p key={pair.plan}>“{pair.plan}” is matched or beaten by “{pair.other}” on every outcome we compare for this starting situation.</p>)}</details>}
       <ul className="commentary">
         {notes.map((n) => <li key={n}>{n}</li>)}
       </ul>
@@ -641,13 +649,15 @@ function ResidentCard({ ballot, index, proposals }: { ballot: Journey["locked"] 
   const top = [...districts].sort((a, b) => ballot.resident.weights[b] - ballot.resident.weights[a]);
   return (
     <div className="resident-card">
-      <b>Resident {index + 1} · lives in {districtInfo[ballot.resident.district].name}</b>
+      <b>{ballot.resident.name} <small>· Resident {index+1}</small></b>
+      <p>{ballot.resident.background}</p>
       <p>
-        Cares most about {districtInfo[top[0]].name} ({Math.round(ballot.resident.weights[top[0]] * 100)}%) and {districtInfo[top[1]].name} ({Math.round(ballot.resident.weights[top[1]] * 100)}%).
+        Cares most about {districtInfo[top[0]].name} and {districtInfo[top[1]].name}.
         Voted <b>{proposals[ballot.choice].name}</b>, because it scored highest for those priorities.
       </p>
       <details>
         <summary>Show calculation</summary>
+        <p>{districts.map(d=>`${districtInfo[d].name} ${Math.round(ballot.resident.weights[d]*100)}%`).join(" · ")}</p>
         <ul>
           {proposals.map((p, i) => (
             <li key={p.id}>{p.name}: utility {fmt(ballot.utilities[i], 4)}{i === ballot.choice ? " ← highest" : ""}</li>

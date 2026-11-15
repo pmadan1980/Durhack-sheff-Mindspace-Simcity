@@ -46,7 +46,7 @@ export function taskText(c: { taskType: TaskType }, text: string): string {
 
 export const config = {
   taskType: "presentation" as TaskType,
-  modelVersion: "mindspace-v1",
+  modelVersion: "mindspace-v2-residents",
   dailyBudget: 6,
   energyCap: 12,
   taskGoal: 12,
@@ -179,24 +179,34 @@ export interface Activity {
 }
 export interface Resident {
   id: string;
+  name: string;
+  background: string;
   district: District;
   weights: Allocation;
 }
-// Archetypes are mixed across district identities; membership never determines a vote.
-const archetypes: Allocation[] = [
-  { A: 0.65, C: 0.12, D: 0.08, R: 0.15 },
-  { A: 0.15, C: 0.65, D: 0.05, R: 0.15 },
-  { A: 0.2, C: 0.1, D: 0.6, R: 0.1 },
-  { A: 0.18, C: 0.17, D: 0.1, R: 0.55 },
-  { A: 0.35, C: 0.35, D: 0.1, R: 0.2 },
-  { A: 0.4, C: 0.15, D: 0.3, R: 0.15 },
-];
+const residentNames=["Ari","Mina","Theo","Zara","Kai","Nia","Leo","Isha","Noor","Finn","Remy","Luca","Ada","Ravi","Esme","Jules","Sami","Mei","Otis","Lina","Eden","Rory","Yara","Alex"];
+const residentMotives:Record<District,string[]>={
+  A:["Likes to finish one thing before starting another.","Feels better with a clear plan for the deadline.","Protects focused time when something matters.","Would rather make steady progress than rush later.","Likes turning a difficult task into small wins.","Wants commitments to have a clear finish line."],
+  C:["Makes room for time that cannot be rescheduled.","Values showing up when someone is counting on them.","Protects opportunities to spend time together.","Tries to keep relationships from becoming an afterthought.","Cares about making shared plans work.","Values a conversation that might otherwise be missed."],
+  D:["Enjoys finding a less repetitive way to work.","Likes testing a new approach before settling on one.","Will invest time now if it makes later work easier.","Looks for a useful idea in an unfamiliar method.","Prefers learning something reusable over repeating a struggle.","Wants space to experiment with how things get done."],
+  R:["Protects a little energy for what comes next.","Prefers a pace that can be sustained.","Cares about having enough room to recover.","Avoids plans that leave no breathing room.","Values a break before the reserve runs empty.","Tries to balance effort with the chance to recharge."],
+};
+/** Seeded individual preferences, independent of names and district membership. */
 export function residents(c: Config): Resident[] {
-  return Array.from({ length: c.residentCount }, (_, i) => ({
-    id: `resident-${i + 1}`,
-    district: districts[Math.floor(i / 6) % 4],
-    weights: { ...archetypes[(i + c.seed) % archetypes.length] },
-  }));
+  let seed=(c.seed ^ 0x6d2b79f5)>>>0;
+  const random=()=>{seed=(seed+0x6d2b79f5)>>>0;let value=seed;value=Math.imul(value^(value>>>15),value|1);value^=value+Math.imul(value^(value>>>7),value|61);return ((value^(value>>>14))>>>0)/4294967296;};
+  return Array.from({length:c.residentCount},(_,i)=>{
+    const leaning=districts[i%4];
+    const focus=.36+random()*.53;
+    const others=districts.filter(d=>d!==leaning);
+    const secondary=others[Math.floor(random()*others.length)];
+    const raw=Object.fromEntries(others.map(d=>[d,.08+random()+(d===secondary ? .8 : 0)])) as Allocation;
+    const total=others.reduce((sum,d)=>sum+raw[d],0);
+    const weights=Object.fromEntries(districts.map(d=>[d,d===leaning?focus:(1-focus)*raw[d]/total])) as Allocation;
+    const ranked=[...districts].sort((a,b)=>weights[b]-weights[a]);
+    const name=residentNames[i%residentNames.length]+(i>=residentNames.length?` ${Math.floor(i/residentNames.length)+1}`:"");
+    return {id:`resident-${i+1}`,name,background:residentMotives[ranked[0]][Math.floor(i/4)%6]+` Also values ${districtInfo[ranked[1]].name.toLowerCase()}.`,district:districts[Math.floor(i/6)%4],weights};
+  });
 }
 export function validateSetup(s: Setup): string | null {
   if (!taskTypes.includes(s.taskType)) return "Choose a supported task type.";

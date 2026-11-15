@@ -100,9 +100,9 @@ export default function Observatory({ round, state, rules, history, election, po
       {resident && <details className="observe-details">
         <summary>Inspect one resident’s vote</summary>
         <label>Resident <select value={residentIndex} onChange={event => setResidentIndex(Number(event.target.value))}>
-          {votes.ballots.map((ballot, index) => <option key={ballot.resident.id} value={index}>{index + 1} · {districtInfo[ballot.resident.district].name}</option>)}
+          {votes.ballots.map((ballot, index) => <option key={ballot.resident.id} value={index}>{ballot.resident.name} · {districtInfo[ballot.resident.district].name}</option>)}
         </select></label>
-        <p>{plans[resident.choice]?.name} had the highest score for this resident.</p>
+        <p>{resident.resident.background}</p><p>{plans[resident.choice]?.name} had the highest score for {resident.resident.name}.</p>
         <ul>{plans.map((plan, index) => <li key={plan.id}>{plan.name} <b>{fmt(resident.utilities[index], 4)}</b></li>)}</ul>
       </details>}
     </section>

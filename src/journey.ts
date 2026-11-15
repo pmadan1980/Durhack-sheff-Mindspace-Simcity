@@ -366,12 +366,17 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
 
 /** Deterministic reveal order that interleaves the four district groups. */
 export function revealOrder(n: number): number[] {
-  const group = Math.ceil(n / districts.length);
-  return Array.from({ length: n }, (_, i) => i).sort(
-    (x, y) =>
-      (x % group) - (y % group) || Math.floor(x / group) - Math.floor(y / group),
-  );
+  const order=Array.from({length:n},(_,i)=>i);
+  // Stable Fisher–Yates order, independent of residents' preferences and votes.
+  let seed=(0x9e3779b9 ^ n)>>>0;
+  for(let i=n-1;i>0;i--){
+    seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+    const j=Math.floor(seed/4294967296*(i+1));
+    [order[i],order[j]]=[order[j],order[i]];
+  }
+  return order;
 }
+
 export function revealedBallots(locked: Locked, revealed: number) {
   return revealOrder(locked.election.ballots.length)
     .slice(0, revealed)

@@ -77,3 +77,15 @@
 .stage-question-voices button[aria-pressed=true] { background:#d4bfdf16;border-color:#cab6d661;color:#f2e6f5; }
 @media(max-width:1000px) and (min-width:761px) { .journey-stage.scene-debate.debate-studio{width:48vw;right:18px;padding:18px}.debate-studio .debate-title h2{font-size:25px}.debate-studio .debate-current-line{font-size:18px} }
 @media(max-width:760px) { .journey-stage.scene-debate.debate-studio{left:12px;right:12px;width:auto;top:43%;bottom:100px;padding:16px}.debate-studio .debate-title{gap:8px}.debate-studio .debate-title h2{font-size:23px}.debate-studio .debate-dialogue{min-height:0}.debate-studio .debate-current-line{font-size:17px}.lightweight .journey-stage.scene-debate.debate-studio{top:145px} }
+
+/* The ballots represent people first, with their chosen plan as a small badge. */
+.residents-grid button { position:relative;display:grid;place-items:center;overflow:visible;background:#302736;color:#b9a7c4;border:1px solid #ad91bf38; }
+.residents-grid button.is-counted { background:#302736;color:#eee1f3;border:1px solid color-mix(in srgb,var(--plan) 65%,#65546f); }
+.resident-initials { font-size:11px;font-weight:500;letter-spacing:.2px; }
+.resident-plan-badge { position:absolute;right:-3px;bottom:-2px;display:grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--plan);border:2px solid #211c29;color:#171222;font-size:9px;font-weight:700; }
+.resident-card> b { display:block;font-size:15px; }.resident-card> b small { font-size:10px;font-weight:normal;color:#b5a2c3; }
+
+.election-context{font-size:11px;color:#bfaeca;margin:12px 0}.election-context summary{cursor:pointer}.election-context p{font-size:12px;line-height:1.6;color:#ddcfe7}
+
+.resident-card{background:#292330;border:1px solid #b8a0c531;border-radius:14px;color:#e4d7ed}.resident-card p{color:#d5c6df;line-height:1.6}
+.scene-voting .stage-action { position:static;margin:14px 0 0;padding:10px 0 16px;background:none; }
