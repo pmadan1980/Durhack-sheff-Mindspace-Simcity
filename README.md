@@ -1,4 +1,4 @@
-# MINDSPACE — the universe within
+# MINDSPACE - the universe within
 
 An explorable, procedural 3D inner world for DurHack 2026. Enter a luminous neural brain, travel between floating districts, release a thought at Headquarters, watch 24 residents make a decision, collect actual memories, and hear or compare its consequences.
 
