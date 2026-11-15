@@ -1,0 +1,71 @@
+{
+  "tool": "built-in image_gen.imagegen",
+  "commonPrompt": "Create ONE panoramic two-panel sprite atlas for a cute MINDSPACE life-simulation game, overall aspect ratio 3:1 (two equal 3:2 panels side by side, 3072x1024 if possible). Image 1 is the style reference. Match its premium handmade polymer-clay miniature diorama, warm honey lamps, mauve textured arched walls, leafy plants, sunset through an arched window, coral accents, soft rounded edges and tactile grain. Same adorable young adult woman with short dark bob, lavender knitted sweater, dark trousers and cream shoes throughout. Whole miniature base visible, straight-on camera, midnight plum background #110e22. The two panels must have IDENTICAL camera, environment geometry, furnishings, lighting, character identity and scale; ONLY the chosen activity and its props change. Fill each half like the reference. Absolutely NO text, labels, lettering, UI or watermarks. Produce a polished narrative illustration, not flat vector art. ",
+  "assets": [
+    {
+      "id": "presentation",
+      "file": "presentation.png",
+      "description": "Scene: a cosy study nook and small cafe, closely matching the reference room. LEFT panel: the main woman standing beside a small presentation easel at the left desk, rehearsing with blank note cards; easel shows simple coloured chart shapes, not words. Both cafe chairs empty. RIGHT panel: desk empty, the same woman laughing with one friend at the right cafe table over warm mugs, as in the reference."
+    },
+    {
+      "id": "polish",
+      "file": "polish.png",
+      "description": "Scene: a cosy study nook with wooden desk, books, lamp and a laptop. LEFT panel: the main woman seated at the laptop, reviewing a printed REPORT with coloured bar charts and pencil corrections, extra report pages neatly spread on the desk. RIGHT panel: same woman relaxed and satisfied at the same desk, laptop shows a simple large checkmark graphic and her report is neatly stacked; no prediction of grades. Same room and camera."
+    },
+    {
+      "id": "hackathon",
+      "file": "hackathon.png",
+      "description": "Scene: cosy miniature hackathon studio with a shared wooden table, two laptops, a tiny modular prototype, notebook and warm desk lamps. LEFT panel: main woman building a new feature, animatedly assembling colourful modular prototype pieces while her laptop has abstract code shapes; teammate sits nearby. RIGHT panel: same two people rehearsing and checking the existing demo together, one pointing to a simple checklist graphic on laptop, prototype assembled and stable. Same environment and characters; no text."
+    },
+    {
+      "id": "study",
+      "file": "study.png",
+      "description": "Scene: the reference cosy study room, keeping desk, lamp, cafe table and arched sunset window. LEFT panel: main woman studying alone at the left desk, with a stack of exam flashcards, open textbook, small coloured revision cards and a small blank revision board. RIGHT panel: same woman and two friends in a collaborative study session around the same desk, pointing at open books and revision cards, discussing a question. No cafe drinking in this scene."
+    },
+    {
+      "id": "shift",
+      "file": "shift.png",
+      "description": "Scene: a warm tiny cafe with a wooden service counter on the LEFT and study nook on the RIGHT, all visible in both panels. LEFT panel: the main woman wears a little coral apron over her lavender sweater and serves a tray of cups to a friendly customer at the counter, working an extra shift. Study nook empty. RIGHT panel: the main woman sits at the study nook writing coursework in an open notebook, apron hung neatly on a hook and service counter unoccupied. Same room and furnishings."
+    },
+    {
+      "id": "moving",
+      "file": "moving.png",
+      "description": "Scene: a cosy tiny shared apartment with a wooden work desk on the LEFT and a doorway with stacked cardboard boxes on the RIGHT. LEFT panel: main woman and one friend carrying a cardboard moving box together near the doorway, little rolled blanket and plant packed beside them; desk empty. RIGHT panel: main woman at the desk completing her own work in a notebook, closed moving boxes remain by the door but nobody is carrying them. Same architecture and camera."
+    },
+    {
+      "id": "tools",
+      "file": "tools.png",
+      "description": "Scene: warm cosy creative studio with a laptop, desk lamp, tiny modular project and arched window. LEFT: main woman confidently using her familiar laptop workflow, notebook beside it, calm focussed face. RIGHT: same woman learning a new tool with a colourful small tutorial booklet, simple abstract node diagram on laptop, small glowing idea bulb and experimenting with modular pieces. Same room furniture and camera; no words."
+    },
+    {
+      "id": "family",
+      "file": "family.png",
+      "description": "Scene: warm miniature apartment with work desk on LEFT and a family dining table on RIGHT under a pendant lamp, arched sunset window and plants. LEFT: main woman enjoying a family meal with two adult relatives, shared small dishes, desk empty. RIGHT: same woman completing her own project at the left desk with laptop and notebook; dining table remains set but the family gathering is not attended in this panel. Same room and camera."
+    },
+    {
+      "id": "housemates",
+      "file": "housemates.png",
+      "description": "Scene: a small cosy shared kitchen and adjacent wooden writing desk, pastel plates and a few dishes by a sink, warm lamp, arched window. LEFT: main woman and a friendly housemate seated facing each other at kitchen table, speaking calmly with open hand gestures about the dishes, no anger or shouting. RIGHT: main woman alone at writing desk composing a short message on her phone with blank abstract speech shapes, housemate not present. Same room and furnishings; no legible text."
+    },
+    {
+      "id": "boundaries",
+      "file": "boundaries.png",
+      "description": "Scene: cosy shared team workspace, one broad wooden desk, laptops, warm desk lamp, little project prototype, arched window. LEFT: main woman seated alone facing two laptops and several tall neat stacks of task folders, looking focused but stretched, while teammate offers one more folder beside her. RIGHT: same two teammates arranging a smaller shared set of task cards together, pointing at a simple blank three-column planning board and agreeing a manageable scope. No illegible words or numbers."
+    },
+    {
+      "id": "scroll",
+      "file": "scroll.png",
+      "description": "Scene: cosy apartment with soft armchair on the RIGHT and wooden task desk on the LEFT, warm lamps, plants, arched sunset window. LEFT: main woman curled up comfortably in the armchair looking at her smartphone during a break; desk empty. RIGHT: same woman seated at desk starting a small next task with a simple paper checklist and pencil; phone placed face down on the armchair. Same furniture and setting."
+    },
+    {
+      "id": "club",
+      "file": "club.png",
+      "description": "Scene: cosy creative club room with wooden desks, art materials, a miniature painting easel, books, plants and arched sunset window. LEFT: main woman joining a friendly two-person arts club session around a table with brushes and colourful handmade clay pieces, smiling as she tries a new craft. RIGHT: main woman seated alone at the same desk doing her existing work from an open notebook; craft materials remain neatly stored nearby, other people absent. Same room and furnishings."
+    },
+    {
+      "id": "invitations",
+      "file": "invitations.png",
+      "description": "Scene: cosy shared social space with a board-game table on the LEFT and tiny acoustic music corner with guitar and two chairs on the RIGHT, warm hanging lamp, plants and arched sunset window. LEFT: main woman enjoying a board-game evening at the left table with two friends, coloured game pieces, music chairs empty. RIGHT: main woman listening to a friend playing acoustic guitar at the right music corner while another friend sits nearby; board-game table empty. Same venue, both areas visible in each panel, no text."
+    }
+  ]
+}

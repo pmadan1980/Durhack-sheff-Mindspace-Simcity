@@ -1,0 +1,20 @@
+.scenario-picker { display:flex; align-items:center; gap:12px; justify-content:space-between; margin:4px 0 15px; }
+.scenario-picker label { display:flex; align-items:center; flex-wrap:wrap; gap:10px; color:#bcb1cc; font-size:11px; }
+.scenario-picker select,.scenario-playback select { min-width:0; max-width:100%; border:1px solid #83709066; border-radius:8px; background:#211a32; color:#eadbe6; padding:8px 10px; font:inherit; }
+.scenario-mini-toolbar { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:12px 0; }
+.scenario-mini-toolbar > span { font-size:10px; color:#c9af80; border:1px solid #b68f4c44; padding:4px 8px; border-radius:999px; }
+.scenario-preview-title { font:400 27px/1.2 Georgia,serif; margin:14px 0; color:#efdfd2; }
+.scenario-playback .playback-world header label { display:grid; gap:7px; width:100%; color:#b8a9c6; font-size:11px; }
+.scenario-fit { font-size:12px; color:#b6d7b6; }
+.scenario-fit small { display:block; margin-top:4px; color:#baaec8; font-size:10px; }
+.scenario-fit.fit-conditional { color:#e7c186; }.scenario-fit.fit-infeasible { color:#efb0ad; }
+.scenario-inputs { font-size:12px; margin:20px 0; color:#c7b8d1; }
+.scenario-inputs summary { cursor:pointer; }
+.scenario-inputs label { display:grid; gap:7px; margin:15px 0; }
+.scenario-inputs input { max-width:230px; border:1px solid #83709066; border-radius:8px; background:#211a32; color:#eadbe6; padding:9px; font:inherit; }
+.scenario-time-inputs { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+.journey-tools .journey-back { display:inline-flex; align-items:center; gap:4px; }
+@media(max-width:680px) { .scenario-picker { align-items:flex-start; } .scenario-picker label { display:grid; width:100%; } .scenario-time-inputs { grid-template-columns:1fr; gap:0; } }
+
+.scenario-entry .inline-field select { background:#211a32; color:#eadbe6; padding:12px; border:1px solid #83709066; border-radius:8px; max-width:100%; }
+.scenario-entry .playback-primary { cursor:pointer; padding:12px 20px; border-radius:20px; background:#e4c3b1; color:#281b30; border:0; }

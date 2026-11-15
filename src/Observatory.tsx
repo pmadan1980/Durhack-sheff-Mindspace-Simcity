@@ -65,7 +65,7 @@ export default function Observatory({ round, state, rules, history, election, po
           aria-pressed={entry.before.day === day} onClick={() => onSelectDay(entry.before.day)}>Day {entry.before.day}</button>)}
       </div>}
       <div className="observe-stats">
-        {stats.filter(stat => stat.district !== "C" || rules.connectionGoal > 0).map(stat => {
+        {stats.filter(stat => stat.district !== "C" || rules.connectionLastOpenDay > 0).map(stat => {
           const change = result[stat.key] - before[stat.key];
           return <article className="observe-stat" key={stat.key}
             style={{ "--stat": districtInfo[stat.district].color } as CSSProperties}>

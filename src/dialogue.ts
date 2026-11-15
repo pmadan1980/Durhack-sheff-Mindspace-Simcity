@@ -39,6 +39,15 @@ export const voices: Record<
   },
 };
 
+export function introLine(d: District, c: Config, day = 1): string {
+  if (d !== "C") return voices[d].line;
+  if (c.connectionLastOpenDay === 0) return "No visit is competing for time today.";
+  if (day > c.connectionLastOpenDay) return "The visit window has closed.";
+  return day === c.connectionLastOpenDay
+    ? "The visit is possible today. This chance closes tonight."
+    : `The visit is possible until the end of day ${c.connectionLastOpenDay}.`;
+}
+
 export type Speaker = District | "N";
 export interface Line {
   speaker: Speaker;

@@ -1,3 +1,6 @@
+import { BrainWorld, JourneyCinema, PlanBridge } from "./BrainCinema";
+import { introLine } from "./dialogue";
+import PlanPreview, { TimeBlocks, timeLabels } from "./PlanPreview";
 import { worldCaption } from "./parallelStory";
 import ParallelWorlds from "./ParallelWorlds";
 import { taskText } from "./simulation";
@@ -33,6 +36,7 @@ import {
 import {
   commentary,
   lastGuidedDay,
+  previousScene,
   leaders,
   planAccent,
   revealOrder,
@@ -95,7 +99,11 @@ export default function JourneyStage(props: Props) {
   const { journey: j, dispatch } = props;
   const w = j.world;
   const c = w.rules;
-  const day = j.locked?.day ?? w.state.day;
+  const day = j.scene === "comparison" && props.horizon
+    ? props.horizon.a[Math.min(props.unfold,props.horizon.a.length-1)].before.day
+    : (j.scene === "listen" || j.scene === "closing") && props.horizon
+      ? props.horizon.a.at(-1)!.before.day
+      : j.locked?.day ?? w.state.day;
   const advance = (from: Scene) => dispatch({ type: "advance", from });
   const stage = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -108,6 +116,7 @@ export default function JourneyStage(props: Props) {
   const wide = j.scene === "voting";
   return (
     <>
+      <JourneyCinema scene={j.scene} thought={props.thought} day={day} policy={j.locked?.proposals[j.locked.election.winner] ?? w.history.at(-1)?.policy} memories={w.history} soundOn={props.soundOn} rules={c} previews={props.horizon ? [props.horizon.a[0],props.horizon.b[0]] : undefined} />
       <nav className="journey-strip" aria-label="Journey progress">
         <span className="journey-day">
           DAY <b>{Math.min(day, lastGuidedDay(c))}</b> / {lastGuidedDay(c)}
@@ -126,6 +135,7 @@ export default function JourneyStage(props: Props) {
           ))}
         </ol>
         <div className="journey-tools">
+          {previousScene(j) && <button className="journey-back" onClick={()=>dispatch({type:"back",from:j.scene})}><ArrowLeft size={13} /> Back</button>}
           {j.scene === "voting" && j.locked && j.revealed < j.locked.election.ballots.length && (
             <button onClick={() => dispatch({ type: "count", on: !j.counting })}>
               {j.counting ? <Pause size={14} /> : <Play size={14} />}
@@ -163,7 +173,7 @@ export default function JourneyStage(props: Props) {
         {j.scene === "listen" && <Listen {...props} advance={advance} />}
         {j.scene === "closing" && <Closing {...props} advance={advance} />}
       </section>
-      {!post && <Ribbon state={w.state} rules={c} />}
+      {!post && j.scene !== "intervention" && <Ribbon state={w.state} rules={c} />}
     </>
   );
 }
@@ -213,12 +223,7 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
       <span className="cosmic-eyebrow">BEFORE WE START · A FEW QUESTIONS</span>
       <h2 tabIndex={-1}>Let’s get your situation right.</h2>
       {thought && <blockquote className="thought-quote">“{thought}”</blockquote>}
-      <p className="stage-lede">
-        Explore your {s.taskType} deadline, an optional visit competing for your time,
-        {" "}{c.dailyBudget} blocks a day and one energy reserve. We suggest a task type
-        from familiar words; confirm it below. These are shared fictional rules,
-        not a prediction of your real outcome.
-      </p>
+
       <fieldset className="choice-set">
         <legend>What are you working on?</legend>
         <label className="inline-field">
@@ -239,9 +244,9 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
           ))}
         </div>
       </fieldset>
-      <fieldset className="choice-set">
+      {(from.visit || s.visitLastDay > 0) && <fieldset className="choice-set">
         <legend>Is a visit competing for your time?</legend>
-        {from.visit ? tag(true, "friend / visit") : <span className="answer-tag">Suggested example: you didn’t mention one</span>}
+        {from.visit && s.visitLastDay > 0 && tag(true, "friend / visit")}
         <div className="chip-row">
           <button aria-pressed={s.visitLastDay > 0} onClick={() => set({ visitLastDay: Math.max(1, s.visitLastDay || 1) })}>
             Yes, a friend’s visit
@@ -258,7 +263,7 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
             </select>
           </label>
         )}
-      </fieldset>
+      </fieldset>}
       <fieldset className="choice-set">
         <legend>{taskText(c, "How far along is the presentation?")}</legend>
         {tag(from.prepared, "almost done")}
@@ -333,9 +338,6 @@ function Briefing({ journey: j, dispatch, thought, advance }: SceneProps) {
       </div>
       {first && (
         <div className="mapped">
-          <p>
-            <b>Built from your answers</b>, using local rules, not AI. The four voices and the 24 residents are part of the authored model.
-          </p>
           <button className="text-button" onClick={() => dispatch({ type: "back", from: "briefing" })}>
             Change my answers
           </button>
@@ -350,7 +352,7 @@ function Introductions({ journey: j, dispatch, advance, onSpeaker }: SceneProps)
   const d = districts[Math.min(j.line, 3)];
   useEffect(() => { onSpeaker(d); return () => onSpeaker(null); }, [d, onSpeaker]);
   const s = j.world.state, c = j.world.rules;
-  const value = { A: `${fmt(s.taskProgress)} / ${c.taskGoal}`, C: `${fmt(s.connectionProgress)} / ${c.connectionGoal}`, D: `${fmt(s.method, 2)}×`, R: `${fmt(s.energy)} / ${c.energyCap}` }[d];
+  const value = { A: `${fmt(s.taskProgress)} / ${c.taskGoal}`, C: c.connectionLastOpenDay ? `${fmt(s.connectionProgress)} / ${c.connectionGoal}` : "No visit planned", D: `${fmt(s.method, 2)}×`, R: `${fmt(s.energy)} / ${c.energyCap}` }[d];
   return (
     <>
       <span className="cosmic-eyebrow">MEET YOUR VOICES · {j.line + 1} OF 4</span>
@@ -360,8 +362,8 @@ function Introductions({ journey: j, dispatch, advance, onSpeaker }: SceneProps)
         <span className="persona-mark"><VoiceIcon d={d} size={64} speaking /></span>
         <div>
           <b>{districtInfo[d].name}</b>
-          <q>{voices[d].line}</q>
-          <small>Guards: {voices[d].guards} · now {value}</small>
+          <q>{introLine(d,c,s.day)}</q>
+          <small>{d === "C" && !c.connectionLastOpenDay ? value : `Guards: ${voices[d].guards} · now ${value}`}</small>
         </div>
       </article>
       <div className="persona-dots" aria-hidden="true">
@@ -417,6 +419,7 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
     <>
       <span className="cosmic-eyebrow">DAY {w.state.day} · THE DEBATE · DECISION CHAMBER</span>
       <h2 tabIndex={-1}>Hear them argue it out.</h2>
+      <div className="brain-debate-strip"><BrainWorld active={districts.filter(d=>d!=="C" || c.connectionLastOpenDay>=w.state.day)} speaker={speaker} mode="debate" /></div>
       <div className="now-speaking" style={{ "--voice": color(current.speaker) } as CSSProperties} aria-live="polite">
         {current.speaker === "N" ? <span className="line-mark">✳</span> : <VoiceIcon d={current.speaker} size={40} speaking />}
         <span>
@@ -544,109 +547,59 @@ function Forecast({ f, rules: c }: { f: ReturnType<typeof forecasts>[number]; ru
 function Intervention({ journey: j, dispatch, advance, onSpeaker, onReact }: SceneProps) {
   const w = j.world, c = w.rules;
   const start = actionState(w.state, c);
-  const f = forecasts(start, w.proposals, c);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<Policy | null>(null);
-  const [said, setSaid] = useState<Line | null>(null);
-  useEffect(() => { onSpeaker(said && said.speaker !== "N" ? said.speaker : null); return () => onSpeaker(null); }, [said, onSpeaker]);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => () => onSpeaker(null), [onSpeaker]);
   const edited = j.edits.filter((e) => e.day === w.state.day).map((e) => e.policyId);
   const open = w.state.day <= c.connectionLastOpenDay;
-  const draftError = draft ? validatePolicy(draft, c) : null;
-  const twins = w.proposals.flatMap((p, i) =>
-    w.proposals.slice(i + 1).filter((q) => sameAllocation(p.allocation, q.allocation)).map((q) => [p.name, q.name]),
-  );
   const used = draft ? districts.reduce((s, d) => s + draft.allocation[d], 0) : 0;
-  return (
-    <>
-      <span className="cosmic-eyebrow">DAY {w.state.day} · YOUR INTERVENTION</span>
-      <h2 tabIndex={-1}>Would you keep these plans, or change one?</h2>
-      <p className="stage-lede">You shape the choices. The {c.residentCount} residents decide between them. Numbers below are forecasts.</p>
-      {twins.length > 0 && (
-        <p className="stage-note">
-          {twins.map(([a, b]) => `${a} and ${b}`).join("; ")} are identical today{open || c.connectionLastOpenDay === 0 ? "" : " because the visit window closed and its blocks moved to Achievement"}. Identical plans split nothing: ties go to the first listed. Edit one to give residents a real choice.
-        </p>
-      )}
-      <div className="plan-list">
-        {w.proposals.map((p, i) => (
-          <article key={p.id} className={`plan-card ${editing === p.id ? "plan-editing" : ""}`}
-            style={{ "--plan": districtInfo[planAccent(p, w.proposals)].color } as CSSProperties}>
-            <header>
-              <span className="plan-number">{i + 1}</span>
-              <div>
-                <b>{p.name}</b>
-                <small>{edited.includes(p.id) ? "EDITED BY YOU" : p.description}</small>
-              </div>
-              <button className="text-button" disabled={editing !== null && editing !== p.id}
-                onClick={() => {
-                  if (editing === p.id) { setEditing(null); setDraft(null); return; }
-                  setEditing(p.id); setDraft(structuredClone(p));
-                }}>
-                {editing === p.id ? "Cancel" : "Edit plan"}
-              </button>
-            </header>
-            {editing === p.id && draft ? (
-              <div className="token-tray">
-                {districts.map((d) => {
-                  const blocked = d === "C" && !open;
-                  return (
-                    <div key={d} className="tray-row" style={{ "--voice": districtInfo[d].color } as CSSProperties}>
-                      <span className="tray-name"><VoiceIcon d={d} size={20} /> {districtInfo[d].name}</span>
-                      <button aria-label={`Remove a ${districtInfo[d].name} block`} disabled={draft.allocation[d] <= 0}
-                        onClick={() => setDraft({ ...draft, allocation: { ...draft.allocation, [d]: draft.allocation[d] - 1 } })}>
-                        <Minus size={13} />
-                      </button>
-                      <output aria-live="off">{draft.allocation[d]}</output>
-                      <button aria-label={`Add a ${districtInfo[d].name} block`} disabled={blocked || used >= c.dailyBudget}
-                        title={blocked ? "The visit window has closed" : undefined}
-                        onClick={() => setDraft({ ...draft, allocation: { ...draft.allocation, [d]: draft.allocation[d] + 1 } })}>
-                        <Plus size={13} />
-                      </button>
-                    </div>
-                  );
-                })}
-                <p className={`budget-count ${used === c.dailyBudget ? "budget-ok" : ""}`} role="status">
-                  {used} of {c.dailyBudget} blocks allocated
-                </p>
-                {!open && <small>{c.connectionLastOpenDay > 0 ? "The visit window has closed" : "There's no visit in this scenario"}, so Connection blocks can't be added.</small>}
-                <Forecast f={forecasts(start, [draft], c)[0]} rules={c} />
-                <button className="secondary small" disabled={!!draftError}
-                  onClick={() => {
-                    const line = reaction(p, draft, start, c);
-                    setSaid(line);
-                    if (line.speaker !== "N")
-                      onReact([{ d: line.speaker, kind: draft.allocation[line.speaker] > p.allocation[line.speaker] ? "cheer" : "sigh" }]);
-                    dispatch({ type: "edit", policy: draft });
-                    setEditing(null); setDraft(null);
-                  }}>
-                  {draftError ?? "Save plan"}
-                </button>
-              </div>
-            ) : (
-              <>
-                <Tokens policy={p} />
-                <Forecast f={f[i]} rules={c} />
-              </>
-            )}
-          </article>
-        ))}
-      </div>
-      {said && (
-        <ol className="transcript reaction"><TranscriptLine line={said} current /></ol>
-      )}
-      <details className="equations">
-        <summary>Show the equations</summary>
-        <p>{taskText(c, "Presentation gain = ")}{c.achievementRate} × Achievement blocks × energy factor ({fmt(f[0].energyFactor, 3)}) × method ({fmt(start.method, 2)}), capped at the remaining points to {c.taskGoal}.</p>
-        <p>Energy factor = {c.energyFactorFloor} + {c.energyFactorRange} × energy / {c.energyCap}. Visit = {c.connectionRate} × Connection blocks while open, capped at the remaining visit points.</p>
-        <p>Energy change = {c.recoveryRate} × Recovery − ({c.achievementEnergyCost}A + {c.connectionEnergyCost}C + {c.discoveryEnergyCost}D), kept between 0 and {c.energyCap}. Method += {c.discoveryMethodGain} × Discovery, from tomorrow, capped at {c.methodCap}×.</p>
-      </details>
-      <Primary
-        label={edited.length ? "Open the polls with your edit" : "Keep these plans · Open the polls"}
-        disabled={editing !== null}
-        note={editing !== null ? "Save or cancel your edit first." : undefined}
-        onClick={() => advance("intervention")}
-      />
-    </>
-  );
+  const twins = w.proposals.some((p, i) => w.proposals.slice(i + 1).some((q) => sameAllocation(p.allocation, q.allocation)));
+  return <>
+    <span className="cosmic-eyebrow">DAY {w.state.day} · BEFORE THE VOTE</span>
+    <h2 tabIndex={-1}>How should today look?</h2>
+    <p className="stage-lede">Keep these plans, or move the blocks. The residents vote next.</p>
+    <div className="plan-legend"><b>{c.dailyBudget} blocks to spend</b>{districts.filter((d) => d !== "C" || open).map((d) => <span key={d} style={{ "--voice": districtInfo[d].color } as CSSProperties}><i />{timeLabels[d]}</span>)}</div>
+    {twins && <p className="stage-note">Two plans use the same blocks today. Adjust one to offer a different choice.</p>}
+    {!open && c.connectionLastOpenDay > 0 && <p className="stage-foot">The visit has ended. Today’s plans focus on what’s still possible.</p>}
+    <div className="plan-list">
+      {w.proposals.map((p, i) => {
+        const changing = editing === p.id && draft !== null;
+        const shown = changing ? draft! : p;
+        const f = forecasts(start, [shown], c)[0];
+        return <article key={p.id} className={`plan-card ${changing ? "plan-editing" : ""}`} aria-label={p.name} style={{ "--plan": districtInfo[planAccent(p, w.proposals)].color } as CSSProperties}>
+          <header><VoiceIcon d={planAccent(p, w.proposals)} size={38} /><div><span className="plan-step">PLAN {i + 1}</span><b>{p.name}</b>{edited.includes(p.id) && <span className="plan-edit-tag">YOUR EDIT</span>}</div></header>
+          <PlanBridge policy={shown} budget={c.dailyBudget} />
+          <TimeBlocks policy={shown} budget={c.dailyBudget} />
+          <PlanPreview state={start} policy={shown} rules={c} />
+          {changing && <div className="token-tray">
+            <small>Remove a block, then put it somewhere else.</small>
+            {districts.filter((d) => d !== "C" || open || shown.allocation.C > 0).map((d) => <div key={d} className="tray-row" style={{ "--voice": districtInfo[d].color } as CSSProperties}>
+              <span className="tray-name"><VoiceIcon d={d} size={20} />{timeLabels[d]}</span>
+              <button aria-label={`Remove a ${timeLabels[d].toLowerCase()} block`} disabled={shown.allocation[d] <= 0} onClick={() => setDraft({ ...shown, allocation: { ...shown.allocation, [d]: shown.allocation[d] - 1 } })}><Minus size={13} /></button>
+              <output>{shown.allocation[d]}</output>
+              <button aria-label={`Add a ${timeLabels[d].toLowerCase()} block`} disabled={(d === "C" && !open) || used >= c.dailyBudget} onClick={() => setDraft({ ...shown, allocation: { ...shown.allocation, [d]: shown.allocation[d] + 1 } })}><Plus size={13} /></button>
+            </div>)}
+            <p className={`budget-count ${used === c.dailyBudget ? "budget-ok" : ""}`} role="status">{used === c.dailyBudget ? "All blocks placed" : `${c.dailyBudget - used} block${c.dailyBudget - used === 1 ? "" : "s"} left to place`}</p>
+            <button className="secondary small" disabled={!!validatePolicy(shown, c)} onClick={() => {
+              const line = reaction(p, shown, start, c);
+              if (line.speaker !== "N") { onSpeaker(line.speaker); onReact([{ d: line.speaker, kind: shown.allocation[line.speaker] > p.allocation[line.speaker] ? "cheer" : "sigh" }]); }
+              dispatch({ type: "edit", policy: shown }); setEditing(null); setDraft(null); setSaved(true);
+            }}>Save changes</button>
+          </div>}
+          <button className="plan-edit-button" disabled={editing !== null && editing !== p.id} onClick={() => {
+            setSaved(false);
+            if (changing) { setEditing(null); setDraft(null); return; }
+            setEditing(p.id); setDraft(structuredClone(p));
+          }}>{changing ? "Cancel edit" : "Adjust blocks"}</button>
+          <details className="plan-forecast-details"><summary>Exact forecast</summary><Forecast f={f} rules={c} /></details>
+        </article>;
+      })}
+    </div>
+    {saved && <p className="plan-save-feedback" role="status">✓ Your plan is saved. The residents will consider your changes.</p>}
+    <details className="equations"><summary>How this works</summary><p>Each plan uses {c.dailyBudget} time blocks. Work moves your {c.taskType} forward. Friends protects the visit while it is possible. Rest restores energy. Ideas improves the method for future work.</p><p>Residents vote for the plan that best fits their priorities. Identical plans are resolved by the existing tie rule: the first listed wins.</p><details><summary>Show the maths</summary><p>Work gain = {c.achievementRate} × work blocks × energy factor × method, capped at the remaining task points. Energy factor = {c.energyFactorFloor} + {c.energyFactorRange} × energy / {c.energyCap}. Visit gain = {c.connectionRate} × friends blocks while open, capped at the remaining visit points. Rest restores {c.recoveryRate} energy per block before costs and capacity limits.</p></details></details>
+    <Primary label={edited.length ? "Vote on these plans" : "Keep these plans · Start the vote"} disabled={editing !== null} note={editing !== null ? "Save or cancel your edit first." : undefined} onClick={() => advance("intervention")} />
+  </>;
 }
 
 function Broadcast({ journey: j, dispatch, advance }: SceneProps) {
@@ -772,7 +725,6 @@ function Result({ journey: j, advance, onSpeaker, onReact }: SceneProps) {
           This plan governs today's {c.dailyBudget} blocks: {allocationText(w)}. Forecast:
           +{fmt(f.taskGain)}{taskText(c, " presentation, ")}{f.connectionOpen ? `+${fmt(f.connectionGain)} visit, ` : ""}{signed(f.energyDelta)} energy{f.methodGain > 0 ? `, ${signed(f.methodGain, 2)}× method from tomorrow` : ""}.
         </p>
-        <small>A plan won, not a voice. Every voice still lives with the result.</small>
       </div>
       <ol className="transcript">
         {lines.map((l, i) => <TranscriptLine key={i} line={l} current={i === 0} />)}
@@ -882,7 +834,6 @@ function Reflection({ journey: j, advance }: SceneProps) {
         {r.after.taskResult === null ? `, due in ${c.taskDeadlineDay - r.before.day} day${c.taskDeadlineDay - r.before.day === 1 ? "" : "s"}` : r.after.taskResult ? ": goal met" : ": goal missed"}.
         {c.connectionLastOpenDay > 0 ? ` The visit ${r.after.connectionResult === null ? `is at ${fmt(r.after.connectionProgress)} of ${c.connectionGoal}` : r.after.connectionResult ? "goal was met" : "goal was missed"}.` : ""} Energy ends at {fmt(r.after.energy)} of {c.energyCap}; method at {fmt(r.after.method, 2)}×.
       </p>
-      <p className="stage-note">Nothing advances until you choose to.</p>
       <Primary label={last ? `See your ${story} story` : `Begin day ${r.before.day + 1}`} onClick={() => advance("reflection")} />
     </>
   );
@@ -937,7 +888,7 @@ function Branch({ journey: j, onBranch, advance }: SceneProps) {
     <>
       <span className="cosmic-eyebrow">A COUNTERFACTUAL INTERVENTION</span>
       <h2 tabIndex={-1}>What if another plan had won?</h2>
-      <p className="stage-lede">{taskText(c, " Pick one completed day and force a different plan. That day replays from its recorded start, with the same morning event. Later recorded days are replayed using the same proposals, stopping when either world completes its presentation or reaches the deadline. Your original world is kept unchanged. ")}</p>
+      <p className="stage-lede">Choose a day. Change the plan. Watch a different future unfold.</p>
       <fieldset className="choice-set">
         <legend>Day to change</legend>
         {days.map((r) => (
@@ -958,7 +909,7 @@ function Branch({ journey: j, onBranch, advance }: SceneProps) {
         ))}
       </fieldset>
       <p className="stage-note">
-        Both worlds are compared through their shared active days, up to day {days.at(-1)!.before.day}. If either finishes earlier, the comparison stops there. It's an intervention, not a new election result.
+        The comparison ends when either task is complete or the deadline arrives.
       </p>
       <Primary
         label="Open Parallel Worlds"
@@ -970,27 +921,27 @@ function Branch({ journey: j, onBranch, advance }: SceneProps) {
 }
 
 function SideBySide({ journey: j, horizon, unfold, onUnfold, advance, ...props }: SceneProps) {
+  const [catalogue,setCatalogue]=useState(false);
   if (!horizon) return null;
   const i = Math.min(unfold, horizon.a.length - 1);
   return <>
     <span className="cosmic-eyebrow">PARALLEL WORLDS · DAY {horizon.a[i].before.day}</span>
-    <h2 tabIndex={-1}>One decision. Two living futures.</h2>
-    <p className="stage-lede">The same beginning, a different plan. Watch what changes when “{horizon.b[0].policy.name}” replaces “{horizon.a[0].policy.name}”.</p>
-    <ParallelWorlds a={horizon.a[i]} b={horizon.b[i]} rules={j.world.rules} mix={props.mix} onMix={props.onMix} playing={props.loops} onPlaying={props.onLoops} soundOn={props.soundOn} onSound={props.onSound} solo={props.solo} onSolo={props.onSolo} mixer={false} />
-    {i < horizon.a.length - 1
+    {!catalogue && <h2 tabIndex={-1}>One decision. Two living futures.</h2>}
+    <ParallelWorlds a={horizon.a[i]} b={horizon.b[i]} rules={j.world.rules} mix={props.mix} onMix={props.onMix} playing={props.loops} onPlaying={props.onLoops} soundOn={props.soundOn} onSound={props.onSound} solo={props.solo} onSolo={props.onSolo} mixer={true} onScenarioChange={setCatalogue} />
+    {!catalogue && (i < horizon.a.length - 1
       ? <Primary label={`Follow the ripples into day ${horizon.a[i + 1].before.day}`} onClick={() => onUnfold(i + 1)} />
-      : <Primary label="Step between the futures" onClick={() => advance("comparison")} />}
+      : <Primary label="Reflect on these paths" onClick={() => advance("comparison")} />)}
   </>;
 }
 
 function Listen({ journey: j, horizon, advance, ...props }: SceneProps) {
+  const [catalogue,setCatalogue]=useState(false);
   if (!horizon) return null;
   return <>
     <span className="cosmic-eyebrow">PARALLEL WORLDS · THE COMPOSITION</span>
-    <h2 tabIndex={-1}>Feel the difference.</h2>
-    <p className="stage-lede">Shift your attention between the futures. Their networks and soundtracks respond together.</p>
-    <ParallelWorlds a={horizon.a.at(-1)!} b={horizon.b.at(-1)!} rules={j.world.rules} mix={props.mix} onMix={props.onMix} playing={props.loops} onPlaying={props.onLoops} soundOn={props.soundOn} onSound={props.onSound} solo={props.solo} onSolo={props.onSolo} />
-    <Primary label="Take the story with you" onClick={() => advance("listen")} />
+    {!catalogue && <h2 tabIndex={-1}>Feel the difference.</h2>}
+    <ParallelWorlds a={horizon.a.at(-1)!} b={horizon.b.at(-1)!} rules={j.world.rules} mix={props.mix} onMix={props.onMix} playing={props.loops} onPlaying={props.onLoops} soundOn={props.soundOn} onSound={props.onSound} solo={props.solo} onSolo={props.onSolo} onScenarioChange={setCatalogue} />
+    {!catalogue && <Primary label="Take the story with you" onClick={() => advance("listen")} />}
   </>;
 }
 
@@ -1005,7 +956,6 @@ function Closing({ journey: j, horizon, onObservatory, advance }: SceneProps) {
       <article className="future-world"><header><h3>What happened</h3></header><p className="future-caption">{worldCaption(a, j.world.rules)}</p></article>
       <article className="future-world future-b"><header><h3>Your alternative</h3></header><p className="future-caption">{worldCaption(b, j.world.rules)}</p></article>
     </div>
-    <p className="stage-note">Neither composition is a prediction. You changed one plan and explored the consequences of the model's rules.</p>
     <button className="text-button" onClick={onObservatory}>Explore the mathematics behind the art</button>
     <Primary label="Explore freely" onClick={() => advance("closing")} />
   </>;

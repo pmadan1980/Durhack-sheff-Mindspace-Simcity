@@ -119,12 +119,12 @@ const entries: Scenario[] = [
   },
   {
     id: "scrolling-break", version: 1, title: "Scrolling break or next task",
-    summary: "Choose an intentional next step after a break.", example: "I keep scrolling during my break instead of returning to work.", routing: [["scrolling", "scroll"], ["break", "task", "work"]],
-    questions: { urgent: "Is there an immediate task deadline?", restorative: "Is this break feeling restorative to you?" },
+    summary: "Compare a break and a next step using your context.", example: "I’m taking a scrolling break and deciding what to do next.", routing: [["scrolling", "scroll"], ["break", "task", "work"]],
+    questions: { urgent: "Is there an immediate task deadline?", restorative: "Is this scrolling break helping you recharge?", socialConnection: "Is scrolling helping you connect with someone you care about?", alternativeRestorative: "Does the other break you have in mind usually help you recharge?" },
     options: [
-      option("continue", "Continue for a bounded time", "Choose a duration deliberately; a timer cannot guarantee behaviour.", scores(0, 1, 0, 1), ["Defers returning to the task.", "Its restorative effect comes from your own report.", "Continues the current activity.", "May include contact, but passive scrolling is not assumed to do so."], [rule("restorative", true, "recovery", 3, "You report that the break is restorative."), rule("urgent", false, "achievement", 3, "You report no immediate deadline competing with this bounded break.")]),
-      option("restart", "Start a small next task", "Choose a manageable defined step.", scores(3, 0, 1, 0), ["Restarts progress on the task.", "Ends the current break.", "Tests a smaller starting step.", "Does not add contact."], [rule("urgent", false, "achievement", -2, "There is no immediate deadline requiring an urgent restart.")]),
-      option("different", "Try a different break", "Choose and time another kind of break.", scores(1, 2, 3, 0), ["Keeps a defined return point.", "Explores another way to rest.", "Tries a different activity.", "Does not assume social contact."], []),
+      option("continue", "Keep scrolling for a while", "Choose how long you want the break to last.", scores(0, 0, 0, 0), ["Uses the time you choose for this break.", "Depends on whether it helps you recharge.", "No learning benefit is assumed.", "Connection depends on what you are doing online."], [rule("restorative", true, "recovery", 3, "You say this scrolling break helps you recharge."), rule("socialConnection", true, "connection", 3, "You say scrolling is helping you connect with someone you care about.")]),
+      option("restart", "Start a small next task", "Make room for one defined next step.", scores(0, 0, 0, 0), ["Can serve the deadline you identify.", "No energy benefit is assumed.", "No learning benefit is assumed.", "No social benefit is assumed."], [rule("urgent", true, "achievement", 3, "You report an immediate task deadline.")]),
+      option("different", "Choose another kind of break", "Compare a specific alternative break.", scores(0, 0, 0, 0), ["Uses the time you choose for another break.", "Depends on whether that break helps you recharge.", "A different activity is not automatically better.", "No social benefit is assumed."], [rule("alternativeRestorative", true, "recovery", 3, "You say the alternative break usually helps you recharge.")]),
     ], reflection: "Did the duration hold, and did the break feel useful?",
   },
   {

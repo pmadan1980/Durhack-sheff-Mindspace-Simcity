@@ -1,0 +1,46 @@
+.playback-stage { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; max-width:650px; margin:12px auto; }
+.playback-stage.is-split { grid-template-columns:repeat(2,minmax(0,1fr)); max-width:none; }
+.playback-world { min-width:0; border:1px solid #7f78a43d; border-radius:16px; padding:12px; background:#171428; overflow:hidden; }
+.playback-world header { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin:0 2px 10px; flex-wrap:wrap; }
+.playback-world header span { font:400 22px/1.2 Georgia,serif; color:#f0e6dc; }
+.playback-world header small { color:#b8afc9; font-size:10px; }
+.playback-scene { background:#131125; overflow:hidden; border-radius:10px; transition:opacity .6s; }
+.everyday-scene { display:block; width:100%; max-height:330px; }
+.playback-stage.is-split .everyday-scene { max-height:280px; }
+.playback-tiles { display:grid; gap:5px; margin-top:9px; }
+.playback-tile { position:relative; isolation:isolate; overflow:hidden; min-width:0; min-height:58px; border:1px dashed #71698366; border-radius:8px; padding:7px 2px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:#958ca7; }
+.playback-tile > i { position:absolute; inset:0; z-index:-1; background:var(--tile); opacity:.17; transform-origin:left; transform:scaleX(var(--fill)); }
+.playback-tile > span { font-size:8px; line-height:1.2; text-align:center; }
+.playback-tile.is-used { border-color:color-mix(in srgb,var(--tile) 60%,transparent); color:#e5dce8; }
+.playback-tile.is-now { box-shadow:inset 0 -2px 0 var(--tile); }
+.playback-outcome { text-align:center; color:#d5ccdf; min-height:28px; font-size:11px; margin:10px 0 0; }
+.playback-controls { max-width:700px; margin:18px auto; padding:17px 20px; border:1px solid #73698e55; background:#211b33; border-radius:16px; }
+.playback-clock { display:grid; gap:3px; text-align:center; margin-bottom:10px; }
+.playback-clock > span { color:#aa9ebf; letter-spacing:2px; font-size:9px; }
+.playback-clock > strong { font:400 27px/1.2 Georgia,serif; color:#f5eadd; }
+.playback-scrub { position:relative; }
+.playback-scrub input { width:100%; accent-color:#f3c979; min-height:27px; }
+.playback-scrub > i { position:absolute; width:2px; height:6px; top:0; background:#ef94b4; pointer-events:none; }
+.playback-caption { text-align:center; min-height:30px; font-size:12px; line-height:1.5; color:#bfb3d0; margin:7px 0 12px; }
+.playback-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+.playback-actions button { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid #85749566; border-radius:999px; background:transparent; color:#e3d7e8; font-size:11px; padding:8px 13px; }
+.playback-actions .playback-primary { background:#f0cb83; color:#332639; border-color:transparent; font-weight:600; }
+.playback-turn { display:flex; justify-content:center; align-items:center; gap:8px; font:400 18px/1.4 Georgia,serif; color:#e9c486; padding:10px; }
+.playback-mixer { max-width:540px; }
+.playback-mixer label { font-size:21px; }
+.scene-running .scene-steam { animation:scene-steam 3s ease-in-out infinite; }
+.scene-running .rest-drift { animation:scene-zzz 3s ease-in-out infinite; }
+.scene-running .idea-rays { animation:scene-glimmer 2.5s ease-in-out infinite; }
+.scene-running .scene-person { animation:scene-person 2.4s ease-in-out infinite; transform-origin:0 -40px; }
+@keyframes scene-steam { 0%,100% { opacity:.3; transform:translateY(0); } 50% { opacity:.8;transform:translateY(-4px); } }
+@keyframes scene-zzz { 0%,100% { opacity:.2;transform:translateY(0); } 50% { opacity:.8;transform:translateY(-5px); } }
+@keyframes scene-glimmer { 0%,100% { opacity:.3; } 50% { opacity:1; } }
+@keyframes scene-person { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-1.5px); } }
+@media(max-width:760px) { .playback-stage.is-split { grid-template-columns:1fr; } .playback-world { padding:10px; } .playback-tiles { gap:3px; } .playback-tile { min-height:52px; } .playback-controls { padding:14px; } }
+@media(prefers-reduced-motion:reduce) { .plan-playback * { animation:none!important; transition:none!important; } }
+
+.playback-stage:not(.is-split) .everyday-scene { max-height: 260px; }
+.playback-controls { padding: 12px 16px; }
+.playback-clock > strong { font-size: 24px; }
+.playback-clock { margin-bottom: 5px; }
+.playback-caption { margin: 3px 0 8px; min-height: 18px; }

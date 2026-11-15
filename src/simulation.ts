@@ -114,17 +114,19 @@ export const judgeSetup: Setup = {
 };
 // Literal, disclosed keyword rules for the authored dilemma; not semantic AI interpretation.
 export function thoughtSignals(text: string) {
+  const noVisit = /\b(?:no|without)\s+(?:(?:a|any|my)\s+)?(?:friends?|visits?|visitors?|guests?)\b|\bnot\s+visiting\b|\bvisit\s+(?:is\s+)?cancelled\b/i.test(text);
   return {
     prepared: /\b(almost done|nearly done|head start|already prepared)\b/i.test(text),
     tired: /\b(tired|exhausted|burnt out|burned out)\b/i.test(text),
-    visit: /\b(friend|friends|visit|visiting|visitor|guest)\b/i.test(text),
+    visit: !noVisit && /\b(friend|friends|visit|visiting|visitor|guest)\b/i.test(text),
   };
 }
 export function setupForThought(text: string, setup: Setup): Setup {
-  const { prepared, tired } = thoughtSignals(text);
+  const { prepared, tired, visit } = thoughtSignals(text);
   return {
     ...setup,
     taskType: inferTaskType(text),
+    visitLastDay: visit ? Math.max(1, Math.min(setup.visitLastDay || 1, setup.taskDeadlineDay)) : 0,
     scenarioId: scenarios[prepared ? 1 : 0].id,
     taskProgress: prepared ? 10 : 0,
     energy: tired ? Math.min(4, setup.energyCap) : setup.energy,

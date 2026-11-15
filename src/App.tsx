@@ -1,3 +1,6 @@
+import { BrainTransition } from "./BrainCinema";
+import ScenarioJourney from "./ScenarioJourney";
+import { routeThought } from "./engine";
 import ParallelWorlds from "./ParallelWorlds";
 import { taskText } from "./simulation";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -51,8 +54,6 @@ import {
 } from "./journey";
 import MindUniverse, { type Location } from "./MindUniverse";
 
-const note =
-  "An interactive fictional model. Change its assumptions and explore what follows.";
 export default function App() {
   const [setup, setSetup] = useState<Setup>({ ...judgeSetup });
   const [journey, dispatch] = useReducer(
@@ -61,6 +62,8 @@ export default function App() {
     initialJourney,
   );
   const [thought, setThought] = useState("");
+  const [thoughtArriving,setThoughtArriving]=useState(false);
+  const [scenarioCandidates, setScenarioCandidates] = useState<string[]>([]);
   const [speaker, setSpeaker] = useState<District | null>(null);
   const [focus, setFocus] = useState<District | null>(null);
   const [listening, setListening] = useState(false);
@@ -188,6 +191,7 @@ export default function App() {
   useEffect(() => {
     audio.play(
       entered &&
+        scenarioCandidates.length === 0 &&
         soundOn &&
         !hiddenPause &&
         (tab === "Compare" && pair
@@ -196,7 +200,7 @@ export default function App() {
             ? playing
             : listening || (scene === "debate" && staged)),
     );
-  }, [entered, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, scene, staged]);
+  }, [entered, scenarioCandidates, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, scene, staged]);
   async function enableSound() {
     try {
       const enabled = await audio.enable();
@@ -215,6 +219,8 @@ export default function App() {
     }
   }
   function restart() {
+    setThoughtArriving(false);
+    setScenarioCandidates([]);
     setHorizon(null);
     audio.reset();
     dispatch({ type: "reset", setup });
@@ -225,6 +231,7 @@ export default function App() {
     setRoom("headquarters");
   }
   function reset() {
+    setScenarioCandidates([]);
     audio.reset();
     dispatch({ type: "reset", setup });
     dispatch({ type: "free" });
@@ -339,6 +346,8 @@ export default function App() {
         audio.reset();
         if (!soundOn && !muted) void enableSound();
         setThought(text);
+        setThoughtArriving(true);
+        setScenarioCandidates(routeThought(text.slice(0, 10000)).candidates.map(s => s.id));
         setPair(null);
         setSelectedDay(null);
         setSolo(null);
@@ -357,7 +366,7 @@ export default function App() {
       }}
       stage={
         staged ? (
-          <JourneyStage
+          thoughtArriving ? <BrainTransition key={thought} thought={thought} onDone={()=>setThoughtArriving(false)} /> : scenarioCandidates.length ? <ScenarioJourney key={thought} thought={thought} candidates={scenarioCandidates} onBack={() => { setScenarioCandidates([]); dispatch({type:"back",from:"clarify"}); }} /> : <JourneyStage
             journey={journey}
             dispatch={dispatch}
             thought={thought}
@@ -698,7 +707,6 @@ export default function App() {
               />
             )}
             <footer className="footer">
-              <span>{note}</span>
               <span>
                 COMPOSED AT DURHACK <span className="footer-star">✳</span> 2026
               </span>
@@ -744,35 +752,26 @@ export default function App() {
               <span className="eyebrow">WELCOME TO MINDSPACE</span>
               <h2 id="help-title">A decision isn’t a single note.</h2>
               <p>
-                It’s a composition of things that matter. Explore this fictional
-                one through four connected districts.
+                Explore what matters through four connected districts.
               </p>
               <ol>
                 <li>
-                  <b>Release a thought.</b>{taskText(c, " Headquarters maps a few disclosed keywords to the authored presentation-and-visit dilemma, locally, not with AI. You can edit the assumptions. ")}</li>
+                  <b>Release a thought.</b> Tell us what’s on your mind, then confirm the details.</li>
                 <li>
                   <b>Meet the voices and hear the debate.</b> Achievement,
-                  Connection, Discovery and Recovery argue from the model’s
-                  forecasts. They don’t vote.
+                  Connection, Discovery and Recovery each make their case.
                 </li>
                 <li>
                   <b>Shape the plans.</b> Keep or edit a six-block plan. Then
                   24 residents vote and you watch the real ballots counted.
                 </li>
                 <li>
-                  <b>See what changed.</b> The winning plan is resolved once; a
-                  ledger, the world and its music show the consequences.
+                  <b>See what changed.</b> Watch the world and its music respond.
                 </li>
                 <li>
-                  <b>Three days, then a what-if.</b> Replay from any day with a
-                  different plan, or explore freely. Explore manually pauses
-                  the journey at any time.
+                  <b>Try another future.</b> Change a completed day’s plan and compare the worlds.
                 </li>
               </ol>
-              <p className="fiction-note">
-                A creative model, not a diagnosis, advice or prediction. No
-                network service or key is needed. Refresh starts a fresh world.
-              </p>
               <button className="primary" onClick={() => setHelp(false)}>
                 Let’s explore <ArrowRight size={15} />
               </button>

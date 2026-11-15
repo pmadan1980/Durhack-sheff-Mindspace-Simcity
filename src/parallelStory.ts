@@ -19,12 +19,12 @@ export function impactMoments(a: Round, b: Round, c: Config): Impact[] {
     moments.push({ id: "visit", district: "C", title: "Some moments don't wait.", detail: `What happened: ${outcome(a.after.connectionResult, "the visit is still possible", "the visit was protected", "the visit was missed")}. Your alternative: ${outcome(b.after.connectionResult, "the visit is still possible", "the visit was protected", "the visit was missed")}.${a.after.connectionResult === b.after.connectionResult ? " The amount of time made for your friend differs." : ""}` });
   const energy = b.after.energy - a.after.energy;
   if (Math.abs(energy) >= 0.75)
-    moments.push({ id: "energy", district: "R", title: "The rhythm of recovery changes.", detail: `Your alternative ends this day with ${energy > 0 ? "more" : "less"} shared energy. Watch the mint halo ${energy > 0 ? "brighten" : "soften"}.` });
+    moments.push({ id: "energy", district: "R", title: "The rhythm of recovery changes.", detail: `Your alternative ends this day with ${energy > 0 ? "more" : "less"} shared energy.` });
   if (Math.abs(b.after.method - a.after.method) >= 0.049)
-    moments.push({ id: "method", district: "D", title: "A different route opens.", detail: `Your alternative has a ${b.after.method > a.after.method ? "stronger" : "smaller"} method multiplier. Blue branches show the method available for future work, not extra work already completed.` });
+    moments.push({ id: "method", district: "D", title: "A different route opens.", detail: `Your alternative has a ${b.after.method > a.after.method ? "stronger" : "smaller"} method multiplier. That changes how efficiently later work can be done.` });
   if (!moments.length) moments.push(sameWorld(a, b)
     ? { id: "converge", district: "D", title: "These paths converge.", detail: "At this point, both worlds have the same task, visit, energy and method outcomes. A different plan doesn't always create a different destination." }
-    : { id: "subtle", district: "D", title: "Small choices, subtle ripples.", detail: "The resource differences here are small. Explore the networks or inspect the model to see the traces they leave." });
+    : { id: "subtle", district: "D", title: "Small choices, subtle ripples.", detail: "The resource differences here are small. Replay the plans or check the exact outcomes." });
   return moments;
 }
 

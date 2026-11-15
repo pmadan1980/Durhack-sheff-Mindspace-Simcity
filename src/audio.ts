@@ -292,6 +292,22 @@ class AudioEngine {
     osc.start(time);
     osc.stop(time + duration + 0.05);
   }
+  resolveComposition(active: District[]) {
+    const ctx=this.context;
+    if(!ctx || ctx.state!=="running" || !this.master || this.muted || this.volume<=0)return;
+    this.stop();
+    const notes:Record<District,number>={A:261.63,C:329.63,D:392,R:130.81};
+    active.forEach((d,index)=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      const start=ctx.currentTime+.04+index*.12;
+      osc.type="sine";osc.frequency.value=notes[d];
+      gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.22,start+.35);
+      gain.gain.exponentialRampToValueAtTime(.001,start+3.2);
+      osc.connect(gain).connect(this.master!);this.voices.add(osc);
+      osc.onended=()=>{this.voices.delete(osc);osc.disconnect();gain.disconnect();};
+      osc.start(start);osc.stop(start+3.3);
+    });
+  }
   stop() {
     clearInterval(this.timer);
     this.timer = undefined;

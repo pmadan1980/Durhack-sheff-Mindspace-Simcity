@@ -1,3 +1,5 @@
+import { BrainMotionContext } from "./brainMotion";
+import { introLine } from "./dialogue";
 import { taskText } from "./simulation";
 import {
   Component,
@@ -440,7 +442,7 @@ export default function MindUniverse(props: Props) {
             >
               <div className="entrance-copy">
                 <span className="cosmic-eyebrow">
-                  A FICTIONAL MODEL OF COMPETING PRIORITIES
+                  EXPLORE THE WORLD WITHIN
                 </span>
                 <h1>MINDSPACE</h1>
                 <p className="entrance-lede">
@@ -477,7 +479,7 @@ export default function MindUniverse(props: Props) {
                       {districtInfo[voice].name.toUpperCase()} ·{" "}
                       {voices[voice].guards.toUpperCase()}
                     </span>
-                    <b>“{voices[voice].line}”</b>
+                    <b>“{introLine(voice,rules,state.day)}”</b>
                     <small>{voices[voice].wants}</small>
                   </>
                 ) : (
@@ -506,7 +508,6 @@ export default function MindUniverse(props: Props) {
               </div>
               <div className="entrance-foot">
                 <span>A COMPOSITION OF PRIORITIES · DURHACK 2026</span>
-                <span>A FICTIONAL MODEL. NOT A DIAGNOSIS.</span>
               </div>
             </motion.main>
           ) : (
@@ -729,11 +730,6 @@ export default function MindUniverse(props: Props) {
                       <ArrowRight size={15} />
                     </button>
                   </form>
-                  <p className="thought-disclosure">
-                    Local, not AI. A few literal keywords prefill answers
-                    (“almost done”, “tired”); next you confirm the deadline,
-                    any visit, progress and energy. Nothing is sent or saved.
-                  </p>
                   {thoughtResult && (
                     <div className="thought-response" role="status">
                       <span>✧</span>
@@ -843,10 +839,10 @@ export default function MindUniverse(props: Props) {
               >
                 {props.children}
               </div>
-              {props.stage}
+              <BrainMotionContext.Provider value={reduced}>{props.stage}</BrainMotionContext.Provider>
               {props.guided && !props.staged && (
                 <div className="resume-bar glass" role="status">
-                  Journey paused while you explore. Nothing advances.
+                  Journey paused.
                   <button className="cosmic-primary" onClick={props.onResume}>
                     Resume journey <ArrowRight size={14} />
                   </button>
