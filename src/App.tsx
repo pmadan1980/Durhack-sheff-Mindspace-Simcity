@@ -1,6 +1,4 @@
 import { BrainTransition } from "./BrainCinema";
-import ScenarioJourney from "./ScenarioJourney";
-import { routeThought } from "./engine";
 import ParallelWorlds from "./ParallelWorlds";
 import { taskText } from "./simulation";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -63,7 +61,6 @@ export default function App() {
   );
   const [thought, setThought] = useState("");
   const [thoughtArriving,setThoughtArriving]=useState(false);
-  const [scenarioCandidates, setScenarioCandidates] = useState<string[]>([]);
   const [speaker, setSpeaker] = useState<District | null>(null);
   const [focus, setFocus] = useState<District | null>(null);
   const [listening, setListening] = useState(false);
@@ -191,7 +188,6 @@ export default function App() {
   useEffect(() => {
     audio.play(
       entered &&
-        scenarioCandidates.length === 0 &&
         soundOn &&
         !hiddenPause &&
         (tab === "Compare" && pair
@@ -200,7 +196,7 @@ export default function App() {
             ? playing
             : listening || (scene === "debate" && staged)),
     );
-  }, [entered, scenarioCandidates, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, scene, staged]);
+  }, [entered, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, scene, staged]);
   async function enableSound() {
     try {
       const enabled = await audio.enable();
@@ -220,7 +216,6 @@ export default function App() {
   }
   function restart() {
     setThoughtArriving(false);
-    setScenarioCandidates([]);
     setHorizon(null);
     audio.reset();
     dispatch({ type: "reset", setup });
@@ -231,7 +226,6 @@ export default function App() {
     setRoom("headquarters");
   }
   function reset() {
-    setScenarioCandidates([]);
     audio.reset();
     dispatch({ type: "reset", setup });
     dispatch({ type: "free" });
@@ -347,7 +341,6 @@ export default function App() {
         if (!soundOn && !muted) void enableSound();
         setThought(text);
         setThoughtArriving(true);
-        setScenarioCandidates(routeThought(text.slice(0, 10000)).candidates.map(s => s.id));
         setPair(null);
         setSelectedDay(null);
         setSolo(null);
@@ -366,7 +359,7 @@ export default function App() {
       }}
       stage={
         staged ? (
-          thoughtArriving ? <BrainTransition key={thought} thought={thought} onDone={()=>setThoughtArriving(false)} /> : scenarioCandidates.length ? <ScenarioJourney key={thought} thought={thought} candidates={scenarioCandidates} onBack={() => { setScenarioCandidates([]); dispatch({type:"back",from:"clarify"}); }} /> : <JourneyStage
+          thoughtArriving ? <BrainTransition key={thought} thought={thought} onDone={()=>setThoughtArriving(false)} /> : <JourneyStage
             journey={journey}
             dispatch={dispatch}
             thought={thought}
