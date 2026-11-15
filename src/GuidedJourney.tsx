@@ -415,10 +415,7 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
       )}
       </div>
       <div className="debate-theatre">
-      <div className="debate-world-and-cast">
-        <div className="brain-debate-strip"><BrainWorld active={districts.filter(d=>d!=="C" || c.connectionLastOpenDay>=w.state.day || speaker===d)} speaker={speaker} mode="debate" onRegionSelect={d=>{setAsking(d);setAsked(null);setAuto(false);}} /></div>
-        <DebatePersonas speaker={speaker} playing={auto&&!done&&!asking} answering={asked?.line===shown} mood={current.speaker===speaker?current.mood:undefined} onSelect={d=>{setAsking(d);setAsked(null);setAuto(false);}}/>
-      </div>
+      <div className="debate-stage-fallback"><DebatePersonas speaker={speaker} playing={auto&&!done&&!asking} answering={asked?.line===shown} mood={current.speaker===speaker?current.mood:undefined} onSelect={d=>{setAsking(d);setAsked(null);setAuto(false);}}/></div>
       <div className="debate-dialogue">
       <div className="now-speaking" style={{ "--voice": color(speaker ?? "N") } as CSSProperties} aria-live="polite">
         {speaker === null ? <span className="line-mark">✳</span> : <VoiceIcon d={speaker} size={40} speaking={auto&&!done} />}
@@ -431,7 +428,7 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
         </button>
       </div>
       <details className="debate-ask-details" open={asking!==null} onToggle={e=>{if(e.currentTarget.open&&!asking)setAsking(speaker??"A");else if(!e.currentTarget.open&&asking)setAsking(null);}}><summary>Ask a voice</summary><div className="ask">
-        <span className="ask-persona-hint">{asking ? `Questions for ${districtInfo[asking].name}` : "Choose a persona below the map"}</span>
+        <div className="stage-question-voices" role="group" aria-label="Choose a voice to ask">{districts.map(d=><button key={d} aria-pressed={asking===d} onClick={()=>{setAsking(d);setAsked(null);}}><VoiceIcon d={d} size={21}/>{districtInfo[d].name}</button>)}</div>
         {asking && (
           <div className="ask-questions">
             {questions.map((q, i) => (
