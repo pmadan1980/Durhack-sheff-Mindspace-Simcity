@@ -1,6 +1,6 @@
 import { conversationLine } from "./debateCopy";
 import DebatePersonas from "./DebatePersonas";
-import { BrainWorld, JourneyCinema, PlanBridge } from "./BrainCinema";
+import { BrainWorld, JourneyCinema } from "./BrainCinema";
 import { introLine } from "./dialogue";
 import PlanPreview, { TimeBlocks, timeLabels } from "./PlanPreview";
 import { worldCaption } from "./parallelStory";
@@ -530,7 +530,6 @@ function Intervention({ journey: j, dispatch, advance, onSpeaker, onReact }: Sce
         const f = forecasts(start, [shown], c)[0];
         return <article key={p.id} className={`plan-card ${changing ? "plan-editing" : ""}`} aria-label={p.name} style={{ "--plan": districtInfo[planAccent(p, w.proposals)].color } as CSSProperties}>
           <header><VoiceIcon d={planAccent(p, w.proposals)} size={38} /><div><span className="plan-step">PLAN {i + 1}</span><b>{p.name}</b>{edited.includes(p.id) && <span className="plan-edit-tag">YOUR EDIT</span>}</div></header>
-          <PlanBridge policy={shown} budget={c.dailyBudget} />
           <TimeBlocks policy={shown} budget={c.dailyBudget} />
           <PlanPreview state={start} policy={shown} rules={c} />
           {changing && <div className="token-tray">
