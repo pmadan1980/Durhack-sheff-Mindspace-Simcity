@@ -1,3 +1,4 @@
+import { spiralDistrict, spiralPoint } from "./hubSpiral";
 import { voicePalette } from "./voicePalette";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
@@ -70,12 +71,14 @@ function Glow({ color = "#b3a1ff", size = 5, position = [0, 0, 0] as Point }) {
 function CameraJourney({
   entered,
   room,
+  spiralProgress,
   reduced,
   onArrive,
   framing = 0,
 }: {
   entered: boolean;
   room: Location;
+  spiralProgress: number;
   reduced: boolean;
   onArrive: () => void;
   framing?: number;
@@ -103,6 +106,7 @@ function CameraJourney({
     arrived.current = false;
     invalidate();
   }, [room, entered, invalidate]);
+  useEffect(() => { invalidate(); }, [spiralProgress, invalidate]);
   useFrame((_, dt) => {
     if (entered && !wasEntered.current) {
       journey.current = 0;
@@ -127,7 +131,7 @@ function CameraJourney({
     let dest: Point = !entered
       ? [0, 0.6, (narrow ? 13.5 : 9.6) + landingView.zoom]
       : room === "hub"
-        ? [0, 16, narrow ? -14 : -23]
+        ? spiralPoint(spiralProgress, (narrow ? 34 : 25) - spiralProgress * 8, 16 - spiralProgress * 7)
         : room === "parallel"
           ? [p[0], 6, p[2] + (narrow ? 31 : 20)]
           : [p[0] + (narrow ? 0 : 3), p[1] + 7, p[2] + (narrow ? 26 : 18)];
@@ -140,6 +144,11 @@ function CameraJourney({
             p[2],
           ]
       : [narrow ? 0 : 0.9, narrow ? 0.3 : 0.25, 0];
+    const spiralFocus = room === "hub" ? spiralDistrict(spiralProgress) : null;
+    if (entered && spiralFocus) {
+      const focus = places[spiralFocus];
+      look = [focus[0] * 0.46, focus[1] + 0.5, -53 + (focus[2] + 53) * 0.46];
+    }
     // Guided scenes keep the 3D action centred in the space beside the opaque story panel.
     let offsetX = 0,
       offsetY = 0;
@@ -172,7 +181,7 @@ function CameraJourney({
       look = [0, 0, -12];
     }
     const position = new THREE.Vector3(...dest);
-    const damping = !entered ? 3 : journey.current < 1.15 ? 2 : 2.1;
+    const damping = !entered ? 3 : journey.current < 1.15 ? 2 : room === "hub" && arrived.current ? 8 : 2.1;
     const transit = flight.current;
     if (transit && !reduced && journey.current >= 1.15) {
       transit.elapsed += Math.min(dt, 0.05);
@@ -698,6 +707,21 @@ function NeuralBridge({
   );
 }
 
+function HubSpiral({ progress }: { progress: number }) {
+  const points = useMemo(() => Array.from({ length: 90 }, (_, i) => {
+    const t = i / 89;
+    return spiralPoint(t, 20 - t * 7, -1.55 + t * 0.6);
+  }), []);
+  const marker = spiralPoint(progress, 20 - progress * 7, -1.45 + progress * 0.6);
+  return <group>
+    <Line points={points} color="#e4b491" lineWidth={1.6} transparent opacity={0.34} />
+    <mesh position={marker}>
+      <sphereGeometry args={[0.17, 12, 10]} />
+      <meshBasicMaterial color="#f6d2af" />
+    </mesh>
+  </group>;
+}
+
 function MemoryOrb({
   memory,
   reduced,
@@ -975,6 +999,7 @@ function ContextWatch({ onUnavailable }: { onUnavailable: () => void }) {
 export default function MindScene({
   entered,
   room,
+  spiralProgress,
   state,
   rules,
   history,
@@ -997,6 +1022,7 @@ export default function MindScene({
 }: {
   entered: boolean;
   room: Location;
+  spiralProgress: number;
   state: State;
   rules: Config;
   history: Round[];
@@ -1051,6 +1077,7 @@ export default function MindScene({
         framing={cue ? (cue.scene === "voting" ? 2 : 1) : 0}
         entered={entered}
         room={room}
+        spiralProgress={spiralProgress}
         reduced={reduced}
         onArrive={onArrive}
       />
@@ -1086,11 +1113,13 @@ export default function MindScene({
                 />
               </group>
             ))}
+            {room === "hub" && <HubSpiral progress={spiralProgress} />}
             {districts.map((d, i) => (
               <NeuralBridge
                 key={d}
                 from={places.hub}
                 to={places[d]}
+                active={room === "hub" && spiralDistrict(spiralProgress) === d}
                 color={colors[i]}
                 reduced={reduced}
               />

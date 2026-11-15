@@ -3,11 +3,9 @@ import { taskText } from "./simulation";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   ArrowRight,
-  ArrowUpRight,
   Check,
   GitBranch,
   Headphones,
-  Orbit,
   Pause,
   Play,
   Radio,
@@ -100,9 +98,6 @@ export default function App() {
   const staged = guided && !journey.exploring;
   const last = history.at(-1);
   const selected = history.find((r) => r.before.day === selectedDay) ?? last;
-  const prior = history.find(
-    (r) => r.before.day === (selected?.before.day ?? 1) - 1,
-  );
   const election = useMemo(
     () => elect(actionState(state, c), proposals, c),
     [state, proposals, c],
@@ -146,7 +141,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, [scene, journey.counting, lockedDay, c]);
   useEffect(() => {
-    if (entered && !journey.exploring && scene !== "free")
+    if (entered && !journey.exploring && scene !== "free" && scene !== "thought")
       setRoom(sceneRoom[scene]);
     setListening(false);
     if (scene !== "result") setReactions([]);
@@ -333,7 +328,7 @@ export default function App() {
         setEntered(true);
         setHiddenPause(false);
         dispatch({ type: "reset", setup });
-        setRoom("headquarters");
+        setRoom("hub");
       }}
       guided={guided}
       free={free}
@@ -693,96 +688,14 @@ export default function App() {
             {tab === "Observatory" && (
               <Observatory
                 round={selected}
-                prior={prior}
                 state={state}
                 rules={c}
                 history={history}
                 election={election}
                 policies={proposals}
+                onSelectDay={setSelectedDay}
+                onBranch={() => compare()}
               />
-            )}
-
-            {room === "observatory" && (
-              <section className="timeline panel">
-                <div className="timeline-heading">
-                  <div>
-                    <span className="eyebrow">YOUR WORLD’S MEMORY</span>
-                    <h2>Every day leaves a trace.</h2>
-                  </div>
-                  <button
-                    className="secondary small"
-                    disabled={!selected}
-                    title={
-                      !selected
-                        ? "Resolve one day to create a branch"
-                        : `Branch day ${selected.before.day}`
-                    }
-                    onClick={() => compare()}
-                  >
-                    <GitBranch size={14} /> Explore another choice{" "}
-                    <ArrowUpRight size={14} />
-                  </button>
-                </div>
-                <div className="timeline-track">
-                  <div className="genesis">
-                    <span>
-                      <Orbit size={20} />
-                    </span>
-                    <b>Genesis</b>
-                    <small>The starting point</small>
-                  </div>
-                  {history.length ? (
-                    history.map((r) => (
-                      <button
-                        key={r.id}
-                        className={`day-portrait ${selected?.id === r.id ? "portrait-selected" : ""}`}
-                        onClick={() => setSelectedDay(r.before.day)}
-                      >
-                        <span className="portrait-art">
-                          {districts.map((d) => (
-                            <i
-                              key={d}
-                              style={{
-                                height: `${8 + r.policy.allocation[d] * 8}px`,
-                                background: districtInfo[d].color,
-                              }}
-                            />
-                          ))}
-                        </span>
-                        <span>
-                          <b>Day {String(r.before.day).padStart(2, "0")}</b>
-                          <small>{r.policy.name}</small>
-                        </span>
-                        <Check size={12} />
-                      </button>
-                    ))
-                  ) : (
-                    <div className="timeline-empty">
-                      <span className="dotted-line" />
-                      Your first election will begin a history. Play or step a
-                      day.
-                      <span className="dotted-line" />
-                    </div>
-                  )}
-                </div>
-                {selected && (
-                  <div className="latest-resolution">
-                    <Check size={13} />
-                    <span>
-                      Day {selected.before.day}: <b>{selected.policy.name}</b>{" "}
-                      elected · +{fmt(selected.activity.taskGain)}{taskText(c, " presentation · +")}{fmt(selected.activity.connectionGain)} visit ·{" "}
-                      {selected.activity.energyDelta >= 0 ? "+" : ""}
-                      {fmt(selected.activity.energyDelta)} net energy.
-                    </span>
-                    <button
-                      className="text-button"
-                      onClick={() => navigate("Observatory")}
-                    >
-                      Inspect calculations <ArrowRight size={12} />
-                    </button>
-                  </div>
-                )}
-              </section>
             )}
             <footer className="footer">
               <span>{note}</span>

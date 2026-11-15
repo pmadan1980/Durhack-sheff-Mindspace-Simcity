@@ -42,6 +42,7 @@ import {
 } from "./simulation";
 import { memoriesFor } from "./memories";
 import MemoryShelf from "./MemoryShelf";
+import { spiralDistrict } from "./hubSpiral";
 import { voices } from "./dialogue";
 import VoiceIcon from "./VoiceIcon";
 import type { Cue } from "./journey";
@@ -120,7 +121,6 @@ export const locations = {
 } as const;
 export type Location = keyof typeof locations;
 const chamberRoute = ["headquarters", "memory", "decision", "parallel", "observatory"] as const;
-const roomRoute = ["hub", ...chamberRoute] as const;
 
 function isTravelControl(target: EventTarget) {
   return target instanceof Element && !!target.closest("button, a, input, select, textarea, summary, [contenteditable]");
@@ -203,8 +203,8 @@ export default function MindUniverse(props: Props) {
   const [settings, setSettings] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [arrived, setArrived] = useState(false);
-  const wheelGesture = useRef({ last: -Infinity, distance: 0, moved: false });
-  const swipeStart = useRef<{ x: number; y: number; room: Location } | null>(null);
+  const [spiralProgress, setSpiralProgress] = useState(0);
+  const swipeLast = useRef<{ x: number; y: number } | null>(null);
   const [thought, setThought] = useState("");
   const [thoughtResult, setThoughtResult] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -222,7 +222,10 @@ export default function MindUniverse(props: Props) {
     : null;
   const info = locations[room];
   const flat = lite || unavailable;
-  const canScrollRooms = entered && !props.staged && !settings && !mapOpen;
+  const canExploreSpiral = entered && room === "hub" && !props.staged && !settings && !mapOpen;
+  const spiralFocus = room === "hub" ? spiralDistrict(spiralProgress) : null;
+  const moveSpiral = (delta: number) =>
+    setSpiralProgress(progress => Math.max(0, Math.min(1, progress + delta)));
   useEffect(() => {
     setArrived(flat || reduced);
     setMapOpen(false);
@@ -238,15 +241,6 @@ export default function MindUniverse(props: Props) {
     if (next !== room) setArrived(flat || reduced);
     onVisit(next);
     setMapOpen(false);
-  }
-  function moveOneRoom(direction: number) {
-    const route: Location[] = roomRoute.filter(place => place !== "parallel" || history.length > 0);
-    const current = route.indexOf(room);
-    const next = current === -1
-      ? direction > 0 ? "headquarters" : "hub"
-      : route[current + direction];
-    if (!next) return;
-    visit(next);
   }
   function openMemory(id: string) {
     setMemoryId(id);
@@ -282,44 +276,30 @@ export default function MindUniverse(props: Props) {
       >
         <div
           className="universe-canvas"
-          data-room-travel={canScrollRooms ? "true" : undefined}
+          data-room-travel={canExploreSpiral ? "true" : undefined}
           onWheel={event => {
-            if (!canScrollRooms || event.ctrlKey || event.metaKey || isTravelControl(event.target)) return;
+            if (!canExploreSpiral || event.ctrlKey || event.metaKey || isTravelControl(event.target)) return;
             const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-            if (!delta) return;
-            const now = performance.now();
-            const gesture = wheelGesture.current;
-            // Trackpad momentum belongs to the same gesture. Wait for a pause before switching again.
-            if (now - gesture.last > 180) {
-              gesture.moved = false;
-              gesture.distance = 0;
-            }
-            gesture.last = now;
-            if (gesture.moved) return;
-            if (Math.sign(delta) !== Math.sign(gesture.distance)) gesture.distance = 0;
-            gesture.distance += delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 56 : 1);
-            if (Math.abs(gesture.distance) >= 48) {
-              gesture.moved = true;
-              moveOneRoom(Math.sign(gesture.distance));
-            }
+            const pixels = delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 280 : 1);
+            moveSpiral(Math.max(-240, Math.min(240, pixels)) / 1600);
           }}
           onTouchStart={event => {
             const touch = event.touches[0];
-            swipeStart.current = canScrollRooms && event.touches.length === 1 && !isTravelControl(event.target)
-              ? { x: touch.clientX, y: touch.clientY, room }
+            swipeLast.current = canExploreSpiral && event.touches.length === 1 && !isTravelControl(event.target)
+              ? { x: touch.clientX, y: touch.clientY }
               : null;
           }}
-          onTouchCancel={() => { swipeStart.current = null; }}
-          onTouchEnd={event => {
-            const start = swipeStart.current;
-            swipeStart.current = null;
-            const end = event.changedTouches[0];
-            if (!canScrollRooms || !start || !end || start.room !== room || event.touches.length) return;
-            const x = start.x - end.clientX;
-            const y = start.y - end.clientY;
-            const distance = Math.abs(y) >= Math.abs(x) ? y : x;
-            if (Math.abs(distance) >= 55) moveOneRoom(Math.sign(distance));
+          onTouchMove={event => {
+            const last = swipeLast.current;
+            if (!canExploreSpiral || !last || event.touches.length !== 1) return;
+            const touch = event.touches[0];
+            const x = last.x - touch.clientX;
+            const y = last.y - touch.clientY;
+            swipeLast.current = { x: touch.clientX, y: touch.clientY };
+            moveSpiral((Math.abs(y) >= Math.abs(x) ? y : x) / 680);
           }}
+          onTouchCancel={() => { swipeLast.current = null; }}
+          onTouchEnd={() => { swipeLast.current = null; }}
           aria-label={
             flat
               ? "Lightweight illustrated mind world"
@@ -335,7 +315,7 @@ export default function MindUniverse(props: Props) {
                   history={history}
                   round={history.at(-1)}
                   running={props.playing && !reduced}
-                  active={district}
+                  active={district ?? spiralFocus}
                   onSelect={(d) => visit(d)}
                   onMemory={(day) => {
                     const m = memories.find((m) => m.day === day);
@@ -359,6 +339,7 @@ export default function MindUniverse(props: Props) {
                 <Scene
                   entered={entered}
                   room={room}
+                  spiralProgress={spiralProgress}
                   state={state}
                   rules={rules}
                   history={history}
@@ -554,14 +535,19 @@ export default function MindUniverse(props: Props) {
                   <span>.</span>
                 </h1>
                 <p>{info.subtitle}</p>
-                <span className="travel-status" role="status">
-                  {!arrived ? `Travelling to ${info.title}…` : canScrollRooms && (
-                    <>
-                      <span className="room-wheel-hint">Scroll the scene to move between rooms</span>
-                      <span className="room-swipe-hint">Swipe the scene to move between rooms</span>
-                    </>
-                  )}
-                </span>
+                {!arrived && <span className="travel-status" role="status">Travelling to {info.title}…</span>}
+                {room === "hub" && <div className="hub-spiral-control">
+                  <label htmlFor="hub-spiral-position">Explore the hub spiral</label>
+                  <input id="hub-spiral-position" type="range" min={0} max={1000}
+                    value={Math.round(spiralProgress * 1000)}
+                    aria-valuetext={spiralFocus ? districtInfo[spiralFocus].name : "Hub overview"}
+                    onChange={event => setSpiralProgress(Number(event.target.value) / 1000)} />
+                  <small>
+                    <span className="room-wheel-hint">Scroll the scene</span>
+                    <span className="room-swipe-hint">Swipe the scene</span>
+                    {" · "}{spiralFocus ? districtInfo[spiralFocus].name : "Hub overview"}
+                  </small>
+                </div>}
               </div>
               )}
               {room === "hub" && !props.guided && (
@@ -992,6 +978,7 @@ export default function MindUniverse(props: Props) {
                     <button
                       key={d}
                       onClick={() => visit(d)}
+                      data-spiral-focus={spiralFocus === d}
                       style={
                         { "--island": locations[d].color } as CSSProperties
                       }
