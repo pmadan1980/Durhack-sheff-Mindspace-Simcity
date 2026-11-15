@@ -721,9 +721,11 @@ function Reflection({ journey: j, advance }: SceneProps) {
       <span className="cosmic-eyebrow">DAY {r.before.day} · REFLECTION</span>
       <h2 tabIndex={-1}>Day {r.before.day}, in one breath.</h2>
       <p className="stage-lede">
-        {r.policy.name} won {r.election.counts[r.election.winner]} of {r.election.ballots.length}{taskText(c, ". The presentation is at ")}{fmt(r.after.taskProgress)} of {c.taskGoal}
-        {r.after.taskResult === null ? `, due in ${c.taskDeadlineDay - r.before.day} day${c.taskDeadlineDay - r.before.day === 1 ? "" : "s"}` : r.after.taskResult ? ": goal met" : ": goal missed"}.
-        {c.connectionLastOpenDay > 0 ? ` The visit ${r.after.connectionResult === null ? `is at ${fmt(r.after.connectionProgress)} of ${c.connectionGoal}` : r.after.connectionResult ? "goal was met" : "goal was missed"}.` : ""} Energy ends at {fmt(r.after.energy)} of {c.energyCap}; method at {fmt(r.after.method, 2)}×.
+        {r.policy.name} was chosen.{" "}
+        {r.after.taskResult === false ? `Your ${c.taskType} wasn't finished before the deadline.` : r.after.taskProgress >= c.taskGoal ? `Your ${c.taskType} is ready.` : r.activity.taskGain > 0 ? `You moved your ${c.taskType} forward, with some work still to do.` : `Your ${c.taskType} still needs attention.`}
+        {c.connectionLastOpenDay > 0 ? r.after.connectionProgress >= c.connectionGoal ? " You made time for your friend." : r.after.connectionResult === false ? r.after.connectionProgress > 0 ? " You had some time together, though less than planned." : " The chance to see your friend passed." : r.activity.connectionGain > 0 ? " You made some time together while the visit is still possible." : r.before.day <= c.connectionLastOpenDay ? " You haven't made time together yet." : " The visit has ended." : ""}
+        {r.after.energy > r.before.energy ? " You ended the day with more energy than you started with." : r.after.energy < r.before.energy ? " Today used some of your energy." : " Your energy stayed steady."}
+        {r.activity.methodGain > 0 ? " You also invested in an easier way to approach future work." : ""}
       </p>
       <Primary label={last ? `See your ${story} story` : `Begin day ${r.before.day + 1}`} onClick={() => advance("reflection")} />
     </>
