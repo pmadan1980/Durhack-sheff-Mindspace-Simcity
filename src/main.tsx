@@ -10,6 +10,7 @@ import "./clay-scenes.css";
 import "./scenario-playback.css";
 import "./comparison-layout.css";
 import "./brain-world.css";
+import "./debate-studio.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

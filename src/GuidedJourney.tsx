@@ -1,3 +1,5 @@
+import { conversationLine } from "./debateCopy";
+import DebatePersonas from "./DebatePersonas";
 import { BrainWorld, JourneyCinema, PlanBridge } from "./BrainCinema";
 import { introLine } from "./dialogue";
 import PlanPreview, { TimeBlocks, timeLabels } from "./PlanPreview";
@@ -155,7 +157,7 @@ export default function JourneyStage(props: Props) {
       </p>
       <section
         ref={stage}
-        className={`journey-stage scene-${j.scene} ${wide ? "stage-wide" : ""}`}
+        className={`journey-stage scene-${j.scene} ${wide ? "stage-wide" : ""} ${j.scene==="debate"?"debate-studio":""}`}
         aria-label="Journey stage"
       >
         {j.scene === "clarify" && <Clarify {...props} advance={advance} />}
@@ -389,12 +391,6 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
   const done = shown >= lines.length - 1;
   // Auto-play at reading pace; it stops at the end, on Pause, or while a question is open.
   const [auto, setAuto] = useState(true);
-  const [pinned, setPinned] = useState(true);
-  const box = useRef<HTMLOListElement>(null);
-  useEffect(() => {
-    const el = box.current;
-    if (el && pinned) el.scrollTop = el.scrollHeight;
-  }, [shown, pinned]);
   useEffect(() => {
     if (!auto || done || asking) return;
     const words = current.text.split(/\s+/).length;
@@ -419,7 +415,10 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
       )}
       </div>
       <div className="debate-theatre">
-      <div className="brain-debate-strip"><BrainWorld active={districts.filter(d=>d!=="C" || c.connectionLastOpenDay>=w.state.day || speaker===d)} speaker={speaker} mode="debate" onRegionSelect={d=>{setAsking(d);setAsked(null);setAuto(false);}} /><div className="brain-speaker-beacon" style={{"--beacon":speaker?districtInfo[speaker].color:"#d5c2ed"} as CSSProperties}>{speaker&&<VoiceIcon d={speaker} size={25} speaking={auto&&!done}/>}<span>{speaker ? `${districtInfo[speaker].name} is speaking` : "The voices are listening"}</span></div></div>
+      <div className="debate-world-and-cast">
+        <div className="brain-debate-strip"><BrainWorld active={districts.filter(d=>d!=="C" || c.connectionLastOpenDay>=w.state.day || speaker===d)} speaker={speaker} mode="debate" onRegionSelect={d=>{setAsking(d);setAsked(null);setAuto(false);}} /></div>
+        <DebatePersonas speaker={speaker} playing={auto&&!done&&!asking} answering={asked?.line===shown} mood={current.speaker===speaker?current.mood:undefined} onSelect={d=>{setAsking(d);setAsked(null);setAuto(false);}}/>
+      </div>
       <div className="debate-dialogue">
       <div className="now-speaking" style={{ "--voice": color(speaker ?? "N") } as CSSProperties} aria-live="polite">
         {speaker === null ? <span className="line-mark">✳</span> : <VoiceIcon d={speaker} size={40} speaking={auto&&!done} />}
@@ -431,15 +430,8 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
           {auto && !done ? <Pause size={13} /> : <Play size={13} />} {done ? "Finished" : auto ? "Pause" : "Auto-play"}
         </button>
       </div>
-      <details className="debate-ask-details" open={asking!==null}><summary>Ask a voice</summary><div className="ask">
-        <div>
-          {districts.map((d) => (
-            <button key={d} aria-pressed={asking === d} onClick={() => setAsking(asking === d ? null : d)}
-              style={{ "--voice": districtInfo[d].color } as CSSProperties}>
-              <VoiceIcon d={d} size={20} /> {districtInfo[d].name}
-            </button>
-          ))}
-        </div>
+      <details className="debate-ask-details" open={asking!==null} onToggle={e=>{if(e.currentTarget.open&&!asking)setAsking(speaker??"A");else if(!e.currentTarget.open&&asking)setAsking(null);}}><summary>Ask a voice</summary><div className="ask">
+        <span className="ask-persona-hint">{asking ? `Questions for ${districtInfo[asking].name}` : "Choose a persona below the map"}</span>
         {asking && (
           <div className="ask-questions">
             {questions.map((q, i) => (
@@ -447,40 +439,20 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
             ))}
           </div>
         )}
-        {asked && (
-          <p className="ask-answer" style={{ "--voice": districtInfo[asked.d].color } as CSSProperties}>
-            <b>{districtInfo[asked.d].name}:</b> {answer(asked.d, asked.q, start, w.proposals, c)}
-          </p>
-        )}
       </div></details>
-      <ol
-        className="transcript transcript-box"
-        ref={box}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          setPinned(el.scrollTop + el.clientHeight >= el.scrollHeight - 24);
-        }}
-      >
-        {lines.slice(0, shown + 1).map((l, i) => (
-          <TranscriptLine key={i} line={l} current={i === shown} />
-        ))}
-      </ol>
-      {!pinned && (
-        <button className="jump-latest" onClick={() => { setPinned(true); box.current?.scrollTo({ top: box.current.scrollHeight }); }}>
-          Jump to the latest line ↓
-        </button>
-      )}
+      <blockquote className="debate-current-line" key={`${shown}:${asked?.line===shown?asked.q:"line"}:${speaker}`}>
+        {asked?.line===shown ? answer(asked.d,asked.q,start,w.proposals,c) : conversationLine(current,start,w.proposals,c)}
+      </blockquote>
       </div>
       </div>
+      <div className="debate-secondary-tools"><details className="debate-history"><summary>Conversation so far</summary><ol className="transcript">{lines.slice(0,shown+1).map((line,i)=><TranscriptLine key={i} line={line} current={false}/>)}</ol></details>
       <details className="debate-plan-details"><summary>See the plan in this argument</summary>{current.policy !== undefined && <PlanChip policy={w.proposals[current.policy]} f={f[current.policy]} rules={c} />}</details>
       <div className="debate-controls">
         {!soundOn && <button className="text-button" onClick={onSound}>Enable debate sounds</button>}
         <button className="text-button" disabled={done} onClick={() => dispatch({ type: "line", line: lines.length - 1 })}>
           Show full exchange
         </button>
-      </div>
-
-
+      </div></div>
     </>
   );
 }
