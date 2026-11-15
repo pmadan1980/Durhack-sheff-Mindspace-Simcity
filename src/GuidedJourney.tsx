@@ -298,9 +298,9 @@ function Briefing({ journey: j, dispatch, advance }: SceneProps) {
       )}
       <div className="fact-grid">
         <article style={{ "--fact": districtInfo.A.color } as CSSProperties}>
-          <small>DEADLINE</small>
+          <small>{c.taskType} progress</small>
           <b>{fmt(w.state.taskProgress)} / {c.taskGoal}</b>
-          <span>{taskText(c, "presentation points, due end of day ")}{c.taskDeadlineDay}{w.state.taskProgress >= c.taskGoal ? " · already complete" : ""}</span>
+          <span>Due end of day {c.taskDeadlineDay}{w.state.taskProgress >= c.taskGoal ? " · already complete" : ""}</span>
         </article>
         <article style={{ "--fact": districtInfo.C.color } as CSSProperties}>
           {hasVisit(c) ? (
