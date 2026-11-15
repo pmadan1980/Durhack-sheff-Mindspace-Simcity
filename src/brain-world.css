@@ -154,3 +154,30 @@
 
 .scene-debate .ask-answer { color:#f0e6f5; background:#2a2139; border-left:3px solid var(--voice); }
 .scene-debate .ask-questions button { color:#e6d8ee; background:#ffffff08; border:1px solid #bfa5d338; }
+
+/* The brain takes over the stage; the old room does not compete behind it. */
+.mind-universe:is(.journey-scene-introductions,.journey-scene-debate) .universe-canvas { opacity:0;pointer-events:none; }
+.journey-stage.scene-introductions { left:24px;right:24px;top:150px;bottom:112px;width:auto;max-width:1120px;margin:0 auto;padding:24px 28px;border:1px solid #d6b2d22a;background:radial-gradient(ellipse at 30% 50%,#30213a,#1c1528 75%); }
+.voice-introduction { min-height:100%;display:flex;flex-direction:column;gap:16px; }
+.intro-heading h2 { margin:6px 0 0;font-size:clamp(25px,2.7vw,35px); }
+.intro-composition { display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:center;gap:40px;flex:1;min-height:0; }
+.intro-world { display:grid;place-items:center;min-width:0; }
+.intro-world .brain-world { width:min(100%,calc(clamp(230px,calc(100dvh - 470px),380px) * 1.5)); }
+.intro-voice-panel { border:0;background:transparent;padding:0 10px 0 0;animation:intro-voice-arrives .4s ease both; }
+.intro-identity { display:flex;align-items:center;gap:12px;color:var(--intro-voice); }
+.intro-identity span { font-size:9px;letter-spacing:2px; }
+.intro-voice-panel h3 { margin:9px 0 14px;font:400 clamp(28px,3.5vw,46px)/1.1 Georgia,serif;color:var(--intro-voice); }
+.intro-voice-panel blockquote { margin:0;color:#f3e6eb;font:400 clamp(18px,1.9vw,25px)/1.5 Georgia,serif; }
+.intro-world-detail { display:inline-block;margin-top:20px;font:12px/1.4 Arial,sans-serif;color:#c8b8d1;padding-top:12px;border-top:1px solid #ceb3df25; }
+.intro-footer { display:flex;align-items:center;justify-content:space-between;gap:20px;padding-top:16px;border-top:1px solid #c8a2d329;flex:none; }
+.intro-voice-tabs { display:flex;gap:7px; }
+.intro-voice-tabs button { display:flex;align-items:center;gap:6px;background:transparent;border:1px solid transparent;color:#ac9dbb;padding:9px 10px;border-radius:14px;font-size:11px;cursor:pointer;transition:background .4s,border-color .4s,color .4s; }
+.intro-voice-tabs button[aria-pressed=true] { border-color:color-mix(in srgb,var(--tab-voice) 65%,transparent);background:color-mix(in srgb,var(--tab-voice) 10%,transparent);color:#f7e9ed; }
+.intro-actions { display:flex;align-items:center;gap:18px; }
+.intro-actions .text-button { font-size:11px;white-space:nowrap; }
+.intro-actions .cosmic-primary { display:flex;justify-content:center;align-items:center;gap:16px;min-width:155px;white-space:nowrap; }
+@keyframes intro-voice-arrives { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:none} }
+@media(max-width:1000px) { .intro-voice-tabs button span{display:none}.intro-voice-tabs button{padding:9px}.intro-composition{gap:24px} }
+@media(max-width:650px) { .journey-stage.scene-introductions{left:12px;right:12px;top:145px;bottom:100px;padding:18px}.voice-introduction{gap:12px}.intro-composition{grid-template-columns:1fr;gap:10px}.intro-world .brain-world{width:min(315px,100%)}.intro-voice-panel{text-align:center;padding:0}.intro-identity{justify-content:center}.intro-identity>svg{width:32px;height:32px}.intro-voice-panel h3{font-size:30px;margin:7px 0 10px}.intro-voice-panel blockquote{font-size:18px}.intro-world-detail{margin-top:12px}.intro-footer{flex-direction:column;gap:12px}.intro-voice-tabs{justify-content:center}.intro-voice-tabs button span{display:inline;font-size:10px}.intro-voice-tabs button{padding:7px}.intro-actions{width:100%;justify-content:space-between;gap:10px}.intro-actions .cosmic-primary{flex:1;min-width:0} }
+@media(prefers-reduced-motion:reduce) { .intro-voice-panel{animation:none}.intro-voice-tabs button{transition:none} }
+.voice-introduction { min-height:0;height:100%; }.intro-world .brain-world { width:min(100%,calc(clamp(210px,calc(100dvh - 490px),380px) * 1.5)); }

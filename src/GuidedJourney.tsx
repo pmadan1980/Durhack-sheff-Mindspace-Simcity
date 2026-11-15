@@ -173,7 +173,7 @@ export default function JourneyStage(props: Props) {
         {j.scene === "listen" && <Listen {...props} advance={advance} />}
         {j.scene === "closing" && <Closing {...props} advance={advance} />}
       </section>
-      {!post && j.scene !== "intervention" && j.scene !== "debate" && <Ribbon state={w.state} rules={c} />}
+      {!post && j.scene !== "intervention" && j.scene !== "debate" && j.scene !== "introductions" && <Ribbon state={w.state} rules={c} />}
     </>
   );
 }
@@ -349,39 +349,26 @@ function Briefing({ journey: j, dispatch, thought, advance }: SceneProps) {
 }
 
 function Introductions({ journey: j, dispatch, advance, onSpeaker }: SceneProps) {
-  const d = districts[Math.min(j.line, 3)];
+  const index=Math.min(j.line,3), d=districts[index];
   useEffect(() => { onSpeaker(d); return () => onSpeaker(null); }, [d, onSpeaker]);
-  const s = j.world.state, c = j.world.rules;
-  const value = { A: `${fmt(s.taskProgress)} / ${c.taskGoal}`, C: c.connectionLastOpenDay ? `${fmt(s.connectionProgress)} / ${c.connectionGoal}` : "No visit planned", D: `${fmt(s.method, 2)}×`, R: `${fmt(s.energy)} / ${c.energyCap}` }[d];
-  return (
-    <>
-      <span className="cosmic-eyebrow">MEET YOUR VOICES · {j.line + 1} OF 4</span>
-      <h2 tabIndex={-1}>Four voices, one shared day.</h2>
-      <p className="stage-lede">They speak for different priorities. They don't vote: {c.residentCount} residents do.</p>
-      <div className="intro-brain-map"><BrainWorld active={[d]} speaker={d} mode="debate" /></div>
-      <article className="persona-card" style={{ "--voice": districtInfo[d].color } as CSSProperties} key={d}>
-        <span className="persona-mark"><VoiceIcon d={d} size={64} speaking /></span>
-        <div>
-          <b>{districtInfo[d].name}</b>
-          <q>{introLine(d,c,s.day)}</q>
-          <small>{d === "C" && !c.connectionLastOpenDay ? value : `Guards: ${voices[d].guards} · now ${value}`}</small>
-        </div>
+  const s=j.world.state,c=j.world.rules;
+  const detail={A:`${fmt(s.taskProgress)} of ${c.taskGoal} ${c.taskType} points`,C:c.connectionLastOpenDay>0?`Visit available until day ${c.connectionLastOpenDay}`:"No visit planned",D:`${fmt(s.method,2)}× current method`,R:`${fmt(s.energy)} of ${c.energyCap} energy`}[d];
+  return <div className="voice-introduction" style={{"--intro-voice":districtInfo[d].color} as CSSProperties}>
+    <header className="intro-heading"><span className="cosmic-eyebrow">MEET YOUR VOICES · {index+1} OF 4</span><h2 tabIndex={-1}>One mind. Four priorities.</h2></header>
+    <div className="intro-composition">
+      <div className="intro-world"><BrainWorld active={[...districts]} speaker={d} mode="debate" /></div>
+      <article className="intro-voice-panel" key={d} aria-label={`${districtInfo[d].name} introduction`}>
+        <div className="intro-identity"><VoiceIcon d={d} size={54} speaking/><span>YOUR INNER VOICE</span></div>
+        <h3>{districtInfo[d].name}</h3>
+        <blockquote>“{introLine(d,c,s.day)}”</blockquote>
+        <span className="intro-world-detail">{detail}</span>
       </article>
-      <div className="persona-dots" aria-hidden="true">
-        {districts.map((k, i) => <i key={k} style={{ background: i <= j.line ? districtInfo[k].color : undefined }} />)}
-      </div>
-      {j.line < 3 ? (
-        <div className="stage-action split">
-          <button className="text-button" onClick={() => advance("introductions")}>Skip introductions</button>
-          <button className="cosmic-primary" onClick={() => dispatch({ type: "line", line: j.line + 1 })}>
-            Next voice <ArrowRight size={15} />
-          </button>
-        </div>
-      ) : (
-        <Primary label="Hear the debate" onClick={() => advance("introductions")} />
-      )}
-    </>
-  );
+    </div>
+    <footer className="intro-footer">
+      <div className="intro-voice-tabs" role="group" aria-label="Meet a voice">{districts.map((voice,i)=><button key={voice} aria-label={`Meet ${districtInfo[voice].name}`} aria-pressed={voice===d} style={{"--tab-voice":districtInfo[voice].color} as CSSProperties} onClick={()=>dispatch({type:"line",line:i})}><VoiceIcon d={voice} size={25}/><span>{districtInfo[voice].name}</span></button>)}</div>
+      <div className="intro-actions"><button className="text-button" onClick={()=>advance("introductions")}>Skip introductions</button><button className="cosmic-primary" onClick={()=>index<3?dispatch({type:"line",line:index+1}):advance("introductions")}>{index<3?"Next voice":"Hear the debate"}<ArrowRight size={15}/></button></div>
+    </footer>
+  </div>;
 }
 
 function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: SceneProps) {

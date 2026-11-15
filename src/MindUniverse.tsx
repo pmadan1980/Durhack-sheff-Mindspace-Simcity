@@ -273,7 +273,7 @@ export default function MindUniverse(props: Props) {
   return (
     <MotionConfig reducedMotion={reduced ? "always" : "never"}>
       <div
-        className={`mind-universe ${entered ? "inside-mind" : "outside-mind"} ${flat ? "lightweight" : "full-3d"} ${reduced ? "still-mind" : ""} room-${room}`}
+        className={`mind-universe ${entered ? "inside-mind" : "outside-mind"} ${flat ? "lightweight" : "full-3d"} ${reduced ? "still-mind" : ""} room-${room} ${props.staged ? `journey-scene-${props.cue?.scene}` : ""}`}
         style={{ "--location": info.color } as CSSProperties}
       >
         <div
