@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { BrainMotionContext } from "./brainMotion";
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, RotateCcw } from "lucide-react";
 import { useReducedMotion } from "motion/react";
@@ -9,7 +11,8 @@ export function playbackPhase(progress: number) {
 }
 
 export function useParallelTimeline(duration: number, start = 1) {
-  const reduced = !!useReducedMotion();
+  const systemReduced = !!useReducedMotion();
+  const reduced = useContext(BrainMotionContext) || systemReduced;
   const cursor = useRef(start);
   const [progress, setProgress] = useState(start);
   const [playing, setPlaying] = useState(false);

@@ -1,8 +1,9 @@
+import ScenarioFlow,{type ScenarioNavigation} from "./ScenarioFlow";
 import { getScenario, routeThought } from "./engine";
 import { BrainTransition } from "./BrainCinema";
 import ParallelWorlds from "./ParallelWorlds";
 import { taskText } from "./simulation";
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -61,6 +62,9 @@ export default function App() {
     initialJourney,
   );
   const [thought, setThought] = useState("");
+  const [scenarioCue,setScenarioCue]=useState<Cue|null>(null);
+  const [scenarioNavigation,setScenarioNavigation]=useState<ScenarioNavigation|null>(null);
+  const onScenarioVisual=useCallback((next:Cue|null,nextRoom?:Location)=>{setScenarioCue(next);if(nextRoom)setRoom(nextRoom);},[]);
   const thoughtMatch = useMemo(() => routeThought(thought.slice(0, 10000)), [thought]);
   const matchedScenario = useMemo(() => thoughtMatch.status === "candidate"
     ? getScenario(thoughtMatch.candidates[0].id) : undefined, [thoughtMatch]);
@@ -100,6 +104,7 @@ export default function App() {
   const free = scene === "free";
   const guided = entered && !free && scene !== "thought";
   const staged = guided && !journey.exploring;
+  const activeScenario=guided&&matchedScenario&&matchedScenario.id!=="presentation-and-visit"?matchedScenario:undefined;
   const last = history.at(-1);
   const selected = history.find((r) => r.before.day === selectedDay) ?? last;
   const election = useMemo(
@@ -197,6 +202,7 @@ export default function App() {
     }
   }
   function restart() {
+    setScenarioCue(null);setScenarioNavigation(null);
     setThought("");
     setThoughtArriving(false);
     setHorizon(null);
@@ -314,11 +320,13 @@ export default function App() {
       guided={guided}
       free={free}
       staged={staged}
-      cue={cue}
+      cue={activeScenario?scenarioCue??cue:cue}
+      parallelReady={!!activeScenario&&scenarioCue?.winner!==null&&scenarioCue?.winner!==undefined}
       inProgress={scene !== "thought"}
       onRelease={(next, text) => {
         audio.reset();
         if (!soundOn && !muted) void enableSound();
+        setScenarioCue(null);setScenarioNavigation(null);
         setThought(text);
         setThoughtArriving(true);
         setHorizon(null);
@@ -341,7 +349,7 @@ export default function App() {
       }}
       stage={
         staged ? (
-          thoughtArriving ? <BrainTransition key={thought} thought={thought} onDone={()=>setThoughtArriving(false)} /> : <JourneyStage
+          thoughtArriving ? <BrainTransition key={thought} thought={thought} onDone={()=>setThoughtArriving(false)} /> : activeScenario ? <ScenarioFlow key={thought} scenarioId={activeScenario.id} thought={thought} onVisual={onScenarioVisual} navigation={scenarioNavigation} onExit={restart} soundOn={soundOn&&!muted} onSound={()=>{setMuted(false);void enableSound();}}/> : <JourneyStage
             journey={journey}
             dispatch={dispatch}
             thought={thought}
@@ -382,6 +390,7 @@ export default function App() {
         ) : null
       }
       onVisit={(next) => {
+        if(activeScenario){if(next==="hub"){restart();setRoom("hub");}else setScenarioNavigation(previous=>({room:next,key:(previous?.key??0)+1}));return;}
         if (guided && !journey.exploring && next !== sceneRoom[scene])
           dispatch({ type: "explore", on: true });
         if (next === "parallel") {

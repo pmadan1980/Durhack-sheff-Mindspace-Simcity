@@ -103,7 +103,7 @@ function council(scenario: Scenario, assessments: Assessment[]) {
     const tiedOptions = feasible.filter((a) => a.scores[resident] === best).map((a) => a.optionId);
     return { resident, choice: tiedOptions.length === 1 ? tiedOptions[0] : null, tiedOptions,
       reason: !tiedOptions.length ? "No confirmed feasible option is available." : tiedOptions.length > 1
-        ? `“${feasible.filter(option => tiedOptions.includes(option.optionId)).map(option => option.label).join("” and “")}” serve this priority equally.`
+        ? `These plans work equally well for what I care about: ${feasible.filter(option => tiedOptions.includes(option.optionId)).map(option => `“${option.label}”`).join(", ")}.`
         : "This feasible option best serves this priority under the authored rules and supplied context." };
   });
   const arguments_: Argument[] = ballots.map((ballot) => {
@@ -125,7 +125,7 @@ function council(scenario: Scenario, assessments: Assessment[]) {
     const option = scenario.options.find((o) => o.id === ballot.choice)!;
     arguments_.push({ id: `reply-${ballot.resident}`, resident: ballot.resident, optionId: ballot.choice,
       replyTo: `opening-${other.resident}`, basis: "authored-rule", factIds: mine.appliedRules.map((r) => r.fact),
-      text: `Your proposal is “${theirs.label}”. I’d choose “${mine.label}”. ${option.rationale[ballot.resident]}` });
+      text: `Your proposal is “${theirs.label}”. I’d choose “${mine.label}”. ${arguments_.find(argument => argument.id === `opening-${ballot.resident}`)?.text ?? option.rationale[ballot.resident]}` });
   }
   return { ballots, arguments: arguments_ };
 }

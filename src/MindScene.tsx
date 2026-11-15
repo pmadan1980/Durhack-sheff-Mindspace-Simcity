@@ -1332,7 +1332,7 @@ function GuidedChamber({
         const height = 0.05 + (count / total) * 2.6;
         const won = cue.winner === i;
         return (
-          <group key={p.id} position={[(i - 1) * 1.1, 0.66, 0.2]}>
+          <group key={p.id} position={[(i - (cue.plans.length-1)/2) * 1.1, 0.66, 0.2]}>
             <mesh position={[0, height / 2, 0]}>
               <cylinderGeometry args={[0.28, 0.28, height, 24]} />
               <meshStandardMaterial

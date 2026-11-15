@@ -72,9 +72,9 @@ const entries: Scenario[] = [
     summary: "Compare learning costs with the requirement.", example: "Should I learn a new tool for this project?", routing: [["tool", "framework", "software"], ["learn", "new", "familiar"]],
     questions: { familiarSufficient: "Can the familiar method meet the requirement?", fallbackFits: "Does the trial leave enough time for the fallback?" },
     options: [
-      option("familiar", "Use the familiar method", "Complete the requirement with an established approach.", scores(3, 2, 0, 1), ["Uses an established workflow.", "Avoids adding setup work.", "Does not explore the new tool.", "May simplify handover of familiar work."], [], ["familiarSufficient"]),
-      option("new", "Learn the new tool", "Include learning and setup in the estimate.", scores(0, 0, 3, 1), ["Must include learning time before delivery.", "Adds unfamiliar work.", "Explores a new capability.", "May need coordination or support."], [rule("familiarSufficient", false, "achievement", 4, "The familiar method cannot meet the requirement.")]),
-      option("trial", "Try with a fallback", "Run a bounded trial before choosing the implementation.", scores(2, 1, 2, 2), ["Uses a checkpoint before committing.", "Bounds the initial experiment.", "Tests the new method.", "Makes the choice easier to explain to collaborators."], [], ["fallbackFits"]),
+      option("familiar", "Use the familiar method", "Complete the requirement with an established approach.", scores(3, 2, 0, 0), ["Uses an established workflow.", "Avoids adding setup work.", "Does not explore the new tool.", "No effect on time with other people is assumed."], [], ["familiarSufficient"]),
+      option("new", "Learn the new tool", "Include learning and setup in the estimate.", scores(0, 0, 3, 0), ["Must include learning time before delivery.", "Adds unfamiliar work.", "Explores a new capability.", "No effect on time with other people is assumed."], [rule("familiarSufficient", false, "achievement", 4, "The familiar method cannot meet the requirement.")]),
+      option("trial", "Try with a fallback", "Run a bounded trial before choosing the implementation.", scores(2, 1, 2, 0), ["Uses a checkpoint before committing.", "Bounds the initial experiment.", "Tests the new method.", "No effect on time with other people is assumed."], [], ["fallbackFits"]),
     ], reflection: "What did the trial establish about the requirement?",
   },
   {

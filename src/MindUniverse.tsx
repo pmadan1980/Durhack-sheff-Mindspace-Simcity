@@ -164,6 +164,7 @@ interface Props {
   guided: boolean;
   staged: boolean;
   cue: Cue | null;
+  parallelReady?:boolean;
   inProgress: boolean;
   onRelease: (setup: Setup, text: string) => void;
   onFree: () => void;
@@ -241,7 +242,7 @@ export default function MindUniverse(props: Props) {
     return () => query.removeEventListener("change", change);
   }, []);
   function visit(next: Location) {
-    if (next === "parallel" && !history.length) return;
+    if (next === "parallel" && !history.length && !props.parallelReady) return;
     if (next !== room) setArrived(flat || reduced);
     onVisit(next);
     setMapOpen(false);
@@ -911,9 +912,9 @@ export default function MindUniverse(props: Props) {
                     className={room === place ? "current-location" : ""}
                     aria-current={room === place ? "location" : undefined}
                     onClick={() => visit(place)}
-                    disabled={place === "parallel" && !history.length}
+                    disabled={place === "parallel" && !history.length && !props.parallelReady}
                     title={
-                      place === "parallel" && !history.length
+                      place === "parallel" && !history.length && !props.parallelReady
                         ? "Resolve a day to open Parallel Worlds"
                         : locations[place].title
                     }
@@ -950,7 +951,7 @@ export default function MindUniverse(props: Props) {
                   <div>
                     {(Object.keys(locations) as Location[]).map((place) => (
                       <button
-                        disabled={place === "parallel" && !history.length}
+                        disabled={place === "parallel" && !history.length && !props.parallelReady}
                         key={place}
                         onClick={() => visit(place)}
                       >

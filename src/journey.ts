@@ -391,6 +391,7 @@ export function leaders(counts: number[]): number[] {
 }
 /** A plan's accent is the district it funds most above the other plans. */
 export function planAccent(p: Policy, ps: Policy[]): District {
+  if(p.accent)return p.accent;
   return districts.reduce((best, d) => {
     const lift = (k: District) =>
       p.allocation[k] - ps.reduce((s, q) => s + q.allocation[k], 0) / ps.length;

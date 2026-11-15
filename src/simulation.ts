@@ -35,12 +35,13 @@ export const taskTypes = ["presentation", "assignment", "report", "project", "ex
 export type TaskType = typeof taskTypes[number];
 export function inferTaskType(text: string): TaskType {
   const aliases: Record<string, TaskType> = {
-    presentation: "presentation", slides: "presentation", talk: "presentation",
+    presentation: "presentation", slides: "presentation",
     assignment: "assignment", coursework: "assignment", essay: "assignment",
     report: "report", project: "project", exam: "exam preparation", test: "exam preparation",
     revision: "revision", revising: "revision",
   };
-  const matches = text.toLowerCase().match(/\b(presentation|slides|talk|assignment|coursework|essay|report|project|exam|test|revision|revising)\b/g) ?? [];
+  const normalized=text.toLowerCase().replace(/\b(?:give|giving|deliver|delivering) (?:a |my |the )?talk\b/g,"presentation");
+  const matches = normalized.match(/\b(presentation|slides|assignment|coursework|essay|report|project|exam|test|revision|revising)\b/g) ?? [];
   const options = [...new Set(matches.map(match => aliases[match]))];
   return options.length === 1 ? options[0] : "task";
 }
@@ -147,17 +148,19 @@ export function thoughtSignals(text: string) {
 export function setupForThought(text: string, setup: Setup): Setup {
   const { prepared, tired, visit, deadline } = thoughtSignals(text);
   const taskDeadlineDay = deadline ?? setup.taskDeadlineDay;
+  const visitTomorrow=/\b(?:friend|visitor|guest)s?\b[^.!?;]{0,30}\b(?:leaves?|leaving|here until) tomorrow\b/i.test(text);
   return {
     ...setup,
     taskType: inferTaskType(text),
     taskDeadlineDay,
-    visitLastDay: visit ? Math.max(1, Math.min(setup.visitLastDay || 1, taskDeadlineDay)) : 0,
+    visitLastDay: visit ? Math.max(1, Math.min(visitTomorrow ? 2 : setup.visitLastDay || 1, taskDeadlineDay)) : 0,
     scenarioId: scenarios[prepared ? 1 : 0].id,
     taskProgress: prepared ? 10 : 0,
     energy: tired ? Math.min(4, setup.energyCap) : setup.energy,
   };
 }
 export interface Policy {
+  accent?: District;
   id: string;
   name: string;
   description: string;

@@ -4,7 +4,7 @@ import ParallelTimeline, { playbackPhase, playbackTransition, useParallelTimelin
 import { getScenario,evaluateDecision,validateDecision,type DecisionInput,type Scenario } from "./engine";
 import { assessedVisual,type ArtFrame } from "./scenarioVisuals";
 
-function Art({ frames, position, running, reduced }: { frames: ArtFrame[]; position: number; running: boolean; reduced: boolean }) {
+export function ScenarioArt({ frames, position, running, reduced }: { frames: ArtFrame[]; position: number; running: boolean; reduced: boolean }) {
   const index=Math.min(frames.length-1,Math.floor(position*frames.length));
   return <><div className={`everyday-scene clay-scene ${running?"scene-running":"scene-paused"}`} role="img" aria-label={frames[index].action} data-reduced={String(reduced)}
     style={{ "--playback-zoom": reduced ? 1 : 1 + position * .055 } as CSSProperties}>
@@ -34,18 +34,23 @@ function exampleInput(scenario: Scenario, initialFacts: DecisionInput["facts"] =
   };
 }
 
-interface Props {
+export interface ScenarioPlaybackProps {
+  onEditContext?:()=>void;
+  readOnlyContext?:boolean;
+  confirmedInput?:DecisionInput;
+  initialLeft?:string;
+  initialRight?:string;
   scenarioId: string;
   onBack: () => void;
   initialFacts?: DecisionInput["facts"];
 }
 
-export default function ScenarioPlayback({ scenarioId, onBack, initialFacts }: Props) {
+export default function ScenarioPlayback({ scenarioId, onBack, initialFacts,confirmedInput,initialLeft,initialRight,readOnlyContext=false,onEditContext }: ScenarioPlaybackProps) {
   const scenario = useMemo(() => getScenario(scenarioId), [scenarioId]);
-  const [input, setInput] = useState(() => exampleInput(scenario, initialFacts));
+  const [input, setInput] = useState(() => confirmedInput ? structuredClone(confirmedInput) : exampleInput(scenario, initialFacts));
   const [draft, setDraft] = useState(input);
-  const [left, setLeft] = useState(scenario.options[0].id);
-  const [right, setRight] = useState(scenario.options[1].id);
+  const [left, setLeft] = useState(initialLeft??scenario.options[0].id);
+  const [right, setRight] = useState(initialRight??scenario.options[1].id);
   const timeline = useParallelTimeline(9000, 0);
   const phase = playbackPhase(timeline.progress);
   const stageLabel = { morning: "Start", midday: "Midpoint", evening: "Wrap-up" }[phase];
@@ -86,10 +91,10 @@ export default function ScenarioPlayback({ scenarioId, onBack, initialFacts }: P
             </select>
           </label></header>
           <div className="playback-scene">
-            <Art frames={visual.frames} position={visual.blocked ? 0 : progress}
+            <ScenarioArt frames={visual.frames} position={visual.blocked ? 0 : progress}
               running={timeline.playing && progress < 1 && !visual.blocked} reduced={timeline.reduced} />
           </div>
-          {visual.blocked && <button className="plan-edit-button" onClick={() => setEditingFacts(true)}>Check the details</button>}
+          {visual.blocked && <button className="plan-edit-button" onClick={() => readOnlyContext ? onEditContext?.() : setEditingFacts(true)}>{readOnlyContext?"Change your details":"Check the details"}</button>}
           {!visual.blocked && duration > 0 && <div className="scenario-time-track">
             <progress max={duration} value={elapsed} aria-label={`${option.label} elapsed time`} />
             <span>{Math.round(elapsed)} / {Math.round(duration)} min</span>
@@ -105,7 +110,7 @@ export default function ScenarioPlayback({ scenarioId, onBack, initialFacts }: P
       })}
     </motion.div>
 
-    <details className="scenario-inputs" open={editingFacts} onToggle={event => setEditingFacts(event.currentTarget.open)}>
+    {!readOnlyContext&&<details className="scenario-inputs" open={editingFacts} onToggle={event => setEditingFacts(event.currentTarget.open)}>
       <summary>Adjust timing and details (optional)</summary>
       <form onSubmit={event => {
         event.preventDefault();
@@ -153,7 +158,7 @@ export default function ScenarioPlayback({ scenarioId, onBack, initialFacts }: P
         </label>)}
         <button className="plan-edit-button" disabled={draftErrors.length > 0}>Update comparison</button>
       </form>
-    </details>
+    </details>}
     {evaluation.error && <p className="stage-note" role="alert">{evaluation.error}</p>}
   </div>;
 }
