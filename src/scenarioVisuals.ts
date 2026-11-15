@@ -15,7 +15,7 @@ export const taskArtwork: Record<TaskType,ArtFrame> = {
 export const scenarioVisuals: Record<string,Record<string,ArtFrame[]>> = {
   "test-and-invitation": { prepare:[clip("study",0,"Preparing for the test")], attend:[friend], brief:[friend,clip("study",0,"Returning to preparation")] },
   "presentation-and-visit": { prepare:[taskArtwork.presentation], visit:[clip("presentation",1,"Meeting while the visit is possible")], split:[taskArtwork.presentation,clip("presentation",1,"Making room for a shorter visit")] },
-  "shift-and-coursework": { work:[clip("shift",0,"Taking the extra shift")], study:[clip("shift",1,"Protecting coursework time")], swap:[clip("shift",0,"A shorter shift, if approved"),clip("shift",1,"Returning to coursework")] },
+  "shift-and-coursework": { work:[clip("shift",0,"Taking the extra shift")], study:[clip("shift",1,"Coursework time — not the extra shift")], swap:[clip("shift",0,"A shorter shift, if approved"),clip("shift",1,"Returning to coursework")] },
   "hackathon-scope": { feature:[clip("hackathon",0,"Building the new feature")], stabilise:[clip("hackathon",1,"Checking and rehearsing the demo")], trial:[clip("hackathon",0,"Trying a small experiment"),clip("hackathon",1,"Returning to the fallback")] },
   "study-format": { solo:[clip("study",0,"Studying independently")], group:[clip("study",1,"Working through questions together")], questions:[clip("study",0,"Preparing questions"),clip("study",1,"Taking questions to the group")] },
   "new-tool": { familiar:[clip("tools",0,"Using the familiar method")], new:[clip("tools",1,"Learning the new tool")], trial:[clip("tools",1,"Trying the tool"),clip("tools",0,"Keeping a familiar fallback")] },

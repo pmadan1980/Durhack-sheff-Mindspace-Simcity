@@ -94,7 +94,6 @@ export default function App() {
   // A guided counterfactual covers the changed day through the last story day in both worlds.
   const [horizon, setHorizon] = useState<{ day: number; a: Round[]; b: Round[] } | null>(null);
   const [unfold, setUnfold] = useState(0);
-  const [hiddenPause, setHiddenPause] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
   const lastStepTime = useRef(0);
@@ -161,7 +160,6 @@ export default function App() {
     const visibility = () => {
       if (document.hidden) {
         dispatch({ type: "pause" });
-        setHiddenPause(true);
         audio.stop();
         void audio.context?.suspend();
         setSoundOn(false);
@@ -181,14 +179,13 @@ export default function App() {
     audio.setMix(0, solo, volume, muted);
   }, [solo, volume, muted]);
   useEffect(() => {
-    audio.play(entered && soundOn && !hiddenPause && tab !== "Compare" &&
+    audio.play(entered && soundOn && tab !== "Compare" &&
       (free ? playing : listening || (scene === "debate" && staged)));
-  }, [entered, soundOn, hiddenPause, playing, tab, free, listening, scene, staged]);
+  }, [entered, soundOn, playing, tab, free, listening, scene, staged]);
   async function enableSound() {
     try {
       const enabled = await audio.enable();
       setSoundOn(enabled);
-      setHiddenPause(false);
       setSoundStatus(
         enabled
           ? "Synthesised live · patterns change on the next bar"
@@ -211,7 +208,6 @@ export default function App() {
     setPair(null);
     setSelectedDay(null);
     setSolo(null);
-    setHiddenPause(false);
     setRoom("headquarters");
   }
   function reset() {
@@ -222,7 +218,6 @@ export default function App() {
     setPair(null);
     setSelectedDay(null);
     setSolo(null);
-    setHiddenPause(false);
     setRoom("decision");
   }
   const locked = journey.locked;
@@ -313,7 +308,6 @@ export default function App() {
       )}
       onEnter={() => {
         setEntered(true);
-        setHiddenPause(false);
         dispatch({ type: "reset", setup });
         setRoom("hub");
       }}
@@ -333,7 +327,6 @@ export default function App() {
         setPair(null);
         setSelectedDay(null);
         setSolo(null);
-        setHiddenPause(false);
         dispatch({ type: "begin", setup: next });
       }}
       onFree={() => {
@@ -407,7 +400,6 @@ export default function App() {
         setPair(null);
         setSelectedDay(null);
         setSolo(null);
-        setHiddenPause(false);
       }}
       onInspect={(day) => {
         setSelectedDay(day);
@@ -421,7 +413,6 @@ export default function App() {
       playing={tab !== "Compare" && playing}
       frozen={tab === "Compare"}
       onPlay={() => {
-        setHiddenPause(false);
         if (tab !== "Compare") dispatch({ type: playing ? "pause" : "play" });
         if (!soundOn && audio.context) void enableSound();
       }}
@@ -446,20 +437,6 @@ export default function App() {
       <div className="app-shell">
         {entered && (
           <main className={`workspace ${staged ? "workspace-staged" : ""}`}>
-            {hiddenPause && (
-              <div className="away-banner" role="status">
-                Your world paused while this tab was away. No days were skipped.
-                <button
-                  onClick={() => {
-                    setHiddenPause(false);
-                    void enableSound();
-                    if (tab !== "Compare") dispatch({ type: "play" });
-                  }}
-                >
-                  Resume experience <Play size={13} />
-                </button>
-              </div>
-            )}
             {guided && journey.exploring && room === "decision" && (
               <section className="panel explore-note">
                 The Decision Chamber is part of your guided journey. Resume the
@@ -568,7 +545,6 @@ export default function App() {
                         className="primary play-button"
                         disabled={ended}
                         onClick={() => {
-                          setHiddenPause(false);
                           dispatch({ type: playing ? "pause" : "play" });
                           if (!soundOn && audio.context) void enableSound();
                         }}

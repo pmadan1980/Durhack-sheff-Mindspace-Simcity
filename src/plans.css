@@ -48,3 +48,4 @@
   .method-hint { padding-left:0; }
 }
 @media(prefers-reduced-motion:reduce) { .plan-progress i,.time-slot { transition:none; } }
+.scenario-guided .scenario-card-description{font-size:13px;line-height:1.5;color:#c7c5da;margin:0}.scenario-guided.scene-intervention .plan-preview{grid-template-columns:1fr}.scenario-guided.scene-intervention .plan-list{align-items:stretch}

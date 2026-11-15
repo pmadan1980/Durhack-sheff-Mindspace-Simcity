@@ -43,7 +43,7 @@ const entries: Scenario[] = [
     questions: { shiftEssential: "Have you identified the shift as an essential commitment?", swapApproved: "Has the shorter or swapped shift been approved?" },
     options: [
       option("work", "Accept the shift", "Include travel and remaining coursework in the plan.", scores(1, 0, 0, 2), ["Meets the offered work commitment.", "Adds a work commitment to the day.", "Uses the existing arrangement.", "Supports the workplace commitment."], [rule("shiftEssential", true, "achievement", 4, "You identify this shift as an essential commitment.")]),
-      option("study", "Decline the extra shift", "Protect coursework time and communicate the decision.", scores(3, 2, 0, 1), ["Protects coursework time.", "Avoids adding the extra shift.", "Does not explore a different schedule.", "Makes availability clear."], [rule("shiftEssential", true, "achievement", -3, "Declining conflicts with the essential commitment you identified.")]),
+      option("study", "Decline the extra shift", "Turn down the extra shift and use this session for coursework.", scores(3, 2, 0, 1), ["Protects coursework time.", "Avoids adding the extra shift.", "Does not explore a different schedule.", "Makes availability clear."], [rule("shiftEssential", true, "achievement", -3, "Declining conflicts with the essential commitment you identified.")]),
       option("swap", "Request a shorter shift", "Compare the revised schedule only once approved.", scores(2, 1, 2, 2), ["Can preserve time for both obligations.", "Bounds the added workload.", "Explores a different schedule.", "Depends on agreement with the workplace."], [], ["swapApproved"]),
     ], reflection: "What schedule was agreed, and what work remained?",
   },
