@@ -21,6 +21,16 @@ describe("scenario playback", () => {
     expect(activityAt(a,6)).toBe("R");
     expect(JSON.stringify([a,b])).toBe(before);
   });
+  it("replays the family artwork when the voted path reaches its family block", () => {
+    const { state, rules } = createWorld(judgeSetup);
+    const round = resolve(state, policies, rules);
+    const props = { round, rules, position: 3, running: true, reduced: false, solo: null };
+    const family = renderToStaticMarkup(createElement(EverydayScene, { ...props, familyTime: true }));
+    const generic = renderToStaticMarkup(createElement(EverydayScene, props));
+    expect(family).toContain("spending time with family");
+    expect(family).toContain("/art/parallel-clay/family.png");
+    expect(generic).not.toContain("/art/parallel-clay/family.png");
+  });
   it.each(taskTypes)("renders a matching %s scene at the start and end", (taskType) => {
     const { state,rules } = createWorld({ ...judgeSetup, taskType });
     const round=resolve(state,policies,rules);

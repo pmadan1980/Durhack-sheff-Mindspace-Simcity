@@ -16,5 +16,6 @@
 .journey-tools .journey-back { display:inline-flex; align-items:center; gap:4px; }
 @media(max-width:680px) { .scenario-picker { align-items:flex-start; } .scenario-picker label { display:grid; width:100%; } .scenario-time-inputs { grid-template-columns:1fr; gap:0; } }
 
-.scenario-entry .inline-field select { background:#211a32; color:#eadbe6; padding:12px; border:1px solid #83709066; border-radius:8px; max-width:100%; }
-.scenario-entry .playback-primary { cursor:pointer; padding:12px 20px; border-radius:20px; background:#e4c3b1; color:#281b30; border:0; }
+
+.scenario-time-track { display:flex; align-items:center; gap:8px; margin:8px 0; color:#d5ccdf; font-size:11px; }
+.scenario-time-track progress { flex:1; min-width:0; height:7px; accent-color:#f0cb83; }

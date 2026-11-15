@@ -10,10 +10,19 @@ export interface RouteResult {
 /** Routing only proposes a family. It never turns a keyword into a confirmed fact. */
 export function routeThought(text: string): RouteResult {
   if (typeof text !== "string" || text.length > 10_000) throw new Error("Use a thought of at most 10,000 characters.");
-  const words = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
-  const candidates = listScenarios().filter((s) => s.routing.every((group) =>
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const words = ` ${normalize(text)} `;
+  const scenarios = listScenarios();
+  const exact = scenarios.find(scenario =>
+    [scenario.title, scenario.example].some(value =>
+      normalize(value) === words.trim()));
+  const matches = exact ? [exact] : scenarios.filter((s) => s.routing.every((group) =>
     group.some((phrase) => words.includes(` ${phrase} `)),
-  )).map(({ id, summary }) => ({ id, summary }));
+  ));
+  const hasFamilyConflict = matches.some(scenario => scenario.id === "family-deadline");
+  const candidates = matches
+    .filter(scenario => !hasFamilyConflict || scenario.id !== "family-time")
+    .map(({ id, summary }) => ({ id, summary }));
   return { status: candidates.length === 0 ? "unsupported" : candidates.length === 1 ? "candidate" : "ambiguous",
     candidates, requiresConfirmation: true };
 }
@@ -94,7 +103,7 @@ function council(scenario: Scenario, assessments: Assessment[]) {
     const tiedOptions = feasible.filter((a) => a.scores[resident] === best).map((a) => a.optionId);
     return { resident, choice: tiedOptions.length === 1 ? tiedOptions[0] : null, tiedOptions,
       reason: !tiedOptions.length ? "No confirmed feasible option is available." : tiedOptions.length > 1
-        ? "The authored rules do not distinguish these feasible options for this priority."
+        ? `“${feasible.filter(option => tiedOptions.includes(option.optionId)).map(option => option.label).join("” and “")}” serve this priority equally.`
         : "This feasible option best serves this priority under the authored rules and supplied context." };
   });
   const arguments_: Argument[] = ballots.map((ballot) => {
@@ -116,7 +125,7 @@ function council(scenario: Scenario, assessments: Assessment[]) {
     const option = scenario.options.find((o) => o.id === ballot.choice)!;
     arguments_.push({ id: `reply-${ballot.resident}`, resident: ballot.resident, optionId: ballot.choice,
       replyTo: `opening-${other.resident}`, basis: "authored-rule", factIds: mine.appliedRules.map((r) => r.fact),
-      text: `Your proposal is “${theirs.label}”. From ${ballot.resident}'s perspective, “${mine.label}” better serves this priority in the authored comparison: ${option.rationale[ballot.resident]}` });
+      text: `Your proposal is “${theirs.label}”. I’d choose “${mine.label}”. ${option.rationale[ballot.resident]}` });
   }
   return { ballots, arguments: arguments_ };
 }

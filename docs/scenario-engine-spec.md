@@ -43,7 +43,7 @@ Every scenario stores:
 
 Do not force all dilemmas into an energy meter. Time arithmetic can be exact within the supplied inputs; feelings and other people's reactions remain unknown. Do not turn illustrative priority scores into psychological measurements.
 
-## The 15 scenarios
+## Original scenario design brief
 
 All conditions below are authored design rules for evaluation, not claims about how people necessarily behave. Ask at most two material clarification questions initially, then let the user edit the remaining assumptions. A blocked calculation may require an additional fact.
 

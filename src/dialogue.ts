@@ -23,7 +23,7 @@ export const voices: Record<
     guards: "Task points",
   },
   C: {
-    line: "Your friend is here today. That chance closes tonight.",
+    line: "There’s an opportunity to spend time together today. That chance closes tonight.",
     wants: "Make room for the visit while it is still possible.",
     guards: "Visit points",
   },
@@ -181,7 +181,7 @@ export function answer(
       return c.connectionLastOpenDay === 0
         ? "There's no visit in this story. I still care that the plan doesn't drain the energy you share with everyone around you."
         : start.day <= c.connectionLastOpenDay
-        ? `${start.day === c.connectionLastOpenDay ? "Your friend leaves tonight." : `Your friend is here until day ${c.connectionLastOpenDay}.`} We need ${c.connectionGoal} visit points, and each block gives ${c.connectionRate}. Once the window closes, no plan can buy this back.`
+        ? `${start.day === c.connectionLastOpenDay ? "The opportunity to spend time together ends tonight." : `There’s time to meet until day ${c.connectionLastOpenDay}.`} We need ${c.connectionGoal} visit points, and each block gives ${c.connectionRate}. Once the window closes, no plan can buy this back.`
         : "The visit has passed. I still care that the plans we choose don't run you down for the people who stay.";
     if (d === "D")
       return start.method >= c.methodCap

@@ -38,7 +38,7 @@ const beatCopy:Record<BrainBeat,[string,string]>={
   dream:["Let the day settle.","The world replays what happened."],
 };
 
-export function BrainTransition({thought,beat="awakening",active:given,policy,memories=[],previews=[],rules,onDone}:{thought:string;beat?:BrainBeat;active?:District[];policy?:Policy;memories?:Round[];previews?:Round[];rules?:Config;onDone:()=>void}) {
+export function BrainTransition({thought,beat="awakening",active:given,policy,memories=[],previews=[],rules,familyTime,onDone}:{thought:string;beat?:BrainBeat;active?:District[];policy?:Policy;memories?:Round[];previews?:Round[];rules?:Config;familyTime?:boolean;onDone:()=>void}) {
   const [active,setActive]=useState(()=>given??thoughtActivation(thought));
   const [paused,setPaused]=useState(false),[elapsed,setElapsed]=useState(0);
   const [ready,setReady]=useState(false);
@@ -71,7 +71,7 @@ export function BrainTransition({thought,beat="awakening",active:given,policy,me
     <h2 id="brain-transition-title">{title}</h2>
     {beat==="awakening"&&<blockquote className="thought-release">{thought.split(/\s+/).map((word,i)=><span key={i} style={{"--word-delay":`${Math.min(i*.07,.9)}s`} as CSSProperties}>{word} </span>)}</blockquote>}
     <div className={`brain-camera camera-${beat}`}>{ready ? <BrainWorld active={active} mode={beat} /> : <div className="brain-image-loading" aria-label="Preparing the inner world"><span>✳</span></div>}
-      {beat==="split"&&<div className={`memory-split ${previews.length?"has-scenes":""}`} aria-label="Two possible futures">{previews.length&&rules ? previews.map((round,i)=><article key={i}><small>{i===0?"What happened":"What if…"}</small><EverydayScene round={round} rules={rules} position={reduced ? rules.dailyBudget : Math.max(0,Math.min(rules.dailyBudget,(elapsed/duration-.35)/.65*rules.dailyBudget))} running={!paused&&!reduced} reduced={reduced} solo={null}/><strong>{round.policy.name}</strong></article>) : <><span>One path</span><i>✳</i><span>Another path</span></>}</div>}
+      {beat==="split"&&<div className={`memory-split ${previews.length?"has-scenes":""}`} aria-label="Two possible futures">{previews.length&&rules ? previews.map((round,i)=><article key={i}><small>{i===0?"What happened":"What if…"}</small><EverydayScene round={round} rules={rules} position={reduced ? rules.dailyBudget : Math.max(0,Math.min(rules.dailyBudget,(elapsed/duration-.35)/.65*rules.dailyBudget))} running={!paused&&!reduced} reduced={reduced} solo={null} familyTime={familyTime}/><strong>{round.policy.name}</strong></article>) : <><span>One path</span><i>✳</i><span>Another path</span></>}</div>}
       {(beat==="memory"||beat==="dream")&&<div className="brain-memory-orbs" aria-label="Recorded days">{memories.map((r,i)=><span key={r.id} style={{"--orb-index":i} as CSSProperties}>Day {r.before.day}<small>{r.policy.name}</small></span>)}</div>}
     </div>
     <p className="brain-transition-caption">{policy?.name ?? caption}</p>
@@ -80,7 +80,7 @@ export function BrainTransition({thought,beat="awakening",active:given,policy,me
   </dialog>;
 }
 
-export function JourneyCinema({scene,thought,policy,memories,day,soundOn=false,previews,rules}:{scene:string;thought:string;policy?:Policy;memories:Round[];day:number;soundOn?:boolean;previews?:Round[];rules?:Config}) {
+export function JourneyCinema({scene,thought,policy,memories,day,soundOn=false,previews,rules,familyTime}:{scene:string;thought:string;policy?:Policy;memories:Round[];day:number;soundOn?:boolean;previews?:Round[];rules?:Config;familyTime?:boolean}) {
   const [dismissed,setDismissed]=useState("");
   const beat=({result:"choice",summary:"memory",comparison:"split",reflection:"dream",closing:"dream"} as Record<string,BrainBeat>)[scene];
   const key=`${scene}:${day}`;
@@ -91,7 +91,7 @@ export function JourneyCinema({scene,thought,policy,memories,day,soundOn=false,p
   },[key,beat,soundOn,policy,dismissed]);
   if(!beat||dismissed===key)return null;
   const active=beat==="split" && previews?.length ? districts.filter(d=>previews.some(round=>round.policy.allocation[d]>0)) : policy?allocationActivation(policy.allocation):thoughtActivation(thought);
-  return <BrainTransition key={key} beat={beat} thought={thought} active={active} policy={policy} memories={memories} previews={previews} rules={rules} onDone={()=>setDismissed(key)} />;
+  return <BrainTransition key={key} beat={beat} thought={thought} active={active} policy={policy} memories={memories} previews={previews} rules={rules} familyTime={familyTime} onDone={()=>setDismissed(key)} />;
 }
 
 export function PlanBridge({policy,budget}:{policy:Policy;budget:number}) {

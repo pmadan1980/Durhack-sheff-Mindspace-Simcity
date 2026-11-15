@@ -10,9 +10,8 @@ import { initialJourney,journeyReducer,previousScene } from "../src/journey";
 import { judgeSetup } from "../src/simulation";
 
 describe("complete visual catalogue",()=>{
-  it("covers all 15 situations, every option, and every task type with existing assets",()=>{
+  it("covers every situation, every option, and every task type with existing assets",()=>{
     const scenarios=listScenarios();
-    expect(scenarios).toHaveLength(15);
     expect(Object.keys(scenarioVisuals).sort()).toEqual(scenarios.map(s=>s.id).sort());
     for(const s of scenarios){
       expect(Object.keys(scenarioVisuals[s.id]).sort()).toEqual(s.options.map(o=>o.id).sort());
@@ -26,7 +25,7 @@ describe("complete visual catalogue",()=>{
   it.each(listScenarios())("renders $id without losing its actual choice labels",scenario=>{
     const html=renderToStaticMarkup(createElement(ScenarioPlayback,{scenarioId:scenario.id,onBack:()=>{}}));
     for(const option of scenario.options) expect(html).toContain(option.id);
-    expect(html).toContain("Example timing");
+    expect(html).toContain("Example assumptions");
     expect(html).not.toContain("NaN");
   });
 });

@@ -23,13 +23,17 @@ export function activityAt(round: Round, position: number): District | null {
   const track = planTrack(round);
   return position <= 0 ? null : track[Math.min(Math.ceil(position) - 1, track.length - 1)] ?? null;
 }
-export function activityCopy(d: District | null, round: Round, c: Config): string {
+export function activityCopy(d: District | null, round: Round, c: Config, familyTime = false): string {
   if (!d) return "Ready for the day";
   if (d === "A") return sceneProfiles[c.taskType].doing;
-  if (d === "C") return round.activity.connectionOpen && c.connectionLastOpenDay > 0 ? "spending time with a friend" : "the visit window is closed";
+  if (d === "C") {
+    if (!round.activity.connectionOpen || c.connectionLastOpenDay <= 0) return "the visit window is closed";
+    return familyTime ? "spending time with family" : "spending time together";
+  }
   if (d === "D") return "trying a different approach";
   return "taking a breather";
 }
-export function tileLabel(d: District, c: Config): string {
-  return d === "A" ? sceneProfiles[c.taskType].work : d === "C" ? "Friend time" : d === "D" ? "New approach" : "Wind down";
+export function tileLabel(d: District, c: Config, familyTime = false): string {
+  if (d === "C") return familyTime ? "Family time" : "Friend time";
+  return d === "A" ? sceneProfiles[c.taskType].work : d === "D" ? "New approach" : "Wind down";
 }

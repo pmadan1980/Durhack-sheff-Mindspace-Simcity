@@ -34,8 +34,15 @@ export const districtInfo = {
 export const taskTypes = ["presentation", "assignment", "report", "project", "exam preparation", "revision", "task"] as const;
 export type TaskType = typeof taskTypes[number];
 export function inferTaskType(text: string): TaskType {
-  const match = text.match(/\b(presentation|assignment|essay|report|project|exam|revision)\b/i)?.[1].toLowerCase();
-  return match === "essay" ? "assignment" : match === "exam" ? "exam preparation" : (match as TaskType | undefined) ?? "task";
+  const aliases: Record<string, TaskType> = {
+    presentation: "presentation", slides: "presentation", talk: "presentation",
+    assignment: "assignment", coursework: "assignment", essay: "assignment",
+    report: "report", project: "project", exam: "exam preparation", test: "exam preparation",
+    revision: "revision", revising: "revision",
+  };
+  const matches = text.toLowerCase().match(/\b(presentation|slides|talk|assignment|coursework|essay|report|project|exam|test|revision|revising)\b/g) ?? [];
+  const options = [...new Set(matches.map(match => aliases[match]))];
+  return options.length === 1 ? options[0] : "task";
 }
 /** Use the confirmed task identity everywhere, preserving sentence/title casing. */
 export function taskText(c: { taskType: TaskType }, text: string): string {
@@ -112,21 +119,39 @@ export const judgeSetup: Setup = {
   taskDeadlineDay: config.taskDeadlineDay,
   visitLastDay: config.connectionLastOpenDay,
 };
-// Literal, disclosed keyword rules for the authored dilemma; not semantic AI interpretation.
+// Suggest editable context from explicit phrases. Ambiguous wording stays at the default.
 export function thoughtSignals(text: string) {
-  const noVisit = /\b(?:no|without)\s+(?:(?:a|any|my)\s+)?(?:friends?|visits?|visitors?|guests?)\b|\bnot\s+visiting\b|\bvisit\s+(?:is\s+)?cancelled\b/i.test(text);
+  const words = text.toLowerCase().replace(/’/g, "'");
+  const noVisit = /\b(?:no|without)\s+(?:(?:a|any|my)\s+)?(?:friends?|visits?|visitors?|guests?)\b|\bnot\s+visiting\b|\bvisit\s+(?:is\s+)?(?:cancelled|canceled)\b/;
+  const visit = /\b(?:a|the|our|my|their) visit\b|\bvisiting (?:me|us|today|tomorrow)\b|\b(?:friends?|visitors?|guests?)\b[^.!?;]{0,18}\b(?:is (?:only )?here|are (?:only )?here|is visiting|are visiting|in town|is leaving|are leaving|leaves|leave|coming over)\b|\b(?:meet|see|visit) (?:my|a) friend\b/;
+  const familyTime = /\b(?:time|dinner|lunch|evening) with (?:my |our |the )?(?:family|parents|siblings|relatives)\b|\bfamily (?:occasion|dinner|event|gathering)\b/;
+  const noFamilyTime = /\b(?:no|without) (?:time|dinner|lunch|evening) with\b|\b(?:cannot|can't|won't) (?:spend time|have dinner|have lunch) with\b|\bfamily (?:occasion|dinner|event|gathering) (?:was |is )?(?:cancelled|canceled)\b/;
+  const invitation = /\b(?:friend|friends) invited (?:me|us)\b/;
+  const suggestedDay = words.match(/\b(?:due|deadline(?: is)?|hand (?:it )?in|submit(?: it)?)\s+(?:(?:by|on)\s+)?(today|tonight|tomorrow|in (?:[1-9]\d*|one|two|three|four|five) days?)\b/) ??
+    words.match(/\b(?:exam|test|presentation) (?:is )?(today|tonight|tomorrow)\b/);
+  const relative = suggestedDay?.[1];
+  const days = ["one", "two", "three", "four", "five"];
+  const amount = relative?.split(" ")[1];
+  const day = relative === "today" || relative === "tonight" ? 1 : relative === "tomorrow" ? 2 :
+    amount ? (Number(amount) || days.indexOf(amount) + 1) + 1 : undefined;
   return {
-    prepared: /\b(almost done|nearly done|head start|already prepared)\b/i.test(text),
-    tired: /\b(tired|exhausted|burnt out|burned out)\b/i.test(text),
-    visit: !noVisit && /\b(friend|friends|visit|visiting|visitor|guest)\b/i.test(text),
+    prepared: !/\b(?:not|nowhere near)\s+(?:almost |nearly |already )?(?:done|finished|prepared|ready)\b/.test(words) &&
+      /\b(almost done|nearly done|almost finished|nearly finished|head start|already prepared)\b/.test(words),
+    tired: !/\b(?:not|never|(?:is|are|was|were|do|does|am)n['’]t)\s+(?:really |very |that )?(?:tired|exhausted|drained)\b/.test(words) &&
+      /\b(tired|exhausted|drained|burnt out|burned out|low on energy)\b/.test(words),
+    visit: !noVisit.test(words) && (visit.test(words) || invitation.test(words) ||
+      (familyTime.test(words) && !noFamilyTime.test(words))),
+    deadline: day !== undefined && day <= maxDeadlineDay ? day : undefined,
   };
 }
 export function setupForThought(text: string, setup: Setup): Setup {
-  const { prepared, tired, visit } = thoughtSignals(text);
+  const { prepared, tired, visit, deadline } = thoughtSignals(text);
+  const taskDeadlineDay = deadline ?? setup.taskDeadlineDay;
   return {
     ...setup,
     taskType: inferTaskType(text),
-    visitLastDay: visit ? Math.max(1, Math.min(setup.visitLastDay || 1, setup.taskDeadlineDay)) : 0,
+    taskDeadlineDay,
+    visitLastDay: visit ? Math.max(1, Math.min(setup.visitLastDay || 1, taskDeadlineDay)) : 0,
     scenarioId: scenarios[prepared ? 1 : 0].id,
     taskProgress: prepared ? 10 : 0,
     energy: tired ? Math.min(4, setup.energyCap) : setup.energy,
@@ -148,7 +173,7 @@ export const policies: Policy[] = [
   {
     id: "visit",
     name: "Protect the visit",
-    description: "Progress, with room for your friend.",
+    description: "Progress, with room for time together.",
     allocation: { A: 2, C: 2, D: 0, R: 2 },
   },
   {
@@ -294,7 +319,7 @@ export function externalEvent(day: number, c: Config = config) {
         : `The visit is available until the end of day ${c.connectionLastOpenDay}. `;
   return {
     id: `ordinary-${day}`,
-    name: day === 1 ? (visit ? "A friend arrives" : "Day one") : "An open day",
+    name: day === 1 ? (visit ? "A chance to spend time together" : "Day one") : "An open day",
     detail:
       day === 1
         ? taskText(c, `${visit}The presentation is due at the end of day ${c.taskDeadlineDay}.`)

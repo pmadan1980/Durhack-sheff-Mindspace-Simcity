@@ -109,13 +109,27 @@ const entries: Scenario[] = [
   },
   {
     id: "family-deadline", version: 1, title: "Family occasion and project deadline",
-    summary: "A family occasion competes with project time.", example: "A family occasion overlaps my project deadline.", routing: [["family", "relative"], ["deadline", "project", "occasion"]],
+    summary: "A family occasion competes with project time.", example: "A family occasion overlaps my project deadline.", routing: [["family", "relative", "relatives", "parents", "siblings"], ["deadline", "project", "coursework", "assignment", "due", "work to finish", "finish work"]],
     questions: { prepared: "Is the required project work complete?", partialPossible: "Is partial attendance practical including travel?" },
     options: [
       option("attend", "Attend the occasion", "Include travel and any remaining project work.", scores(0, 0, 1, 3), ["Must account for remaining project work.", "Includes travel and attendance.", "Makes room for a different activity.", "Makes time for family contact."], [rule("prepared", true, "achievement", 4, "The required project work is already complete.")]),
       option("project", "Protect project time", "Prioritise remaining work and communicate the decision.", scores(3, 2, 0, 1), ["Protects remaining project work.", "Avoids the additional travel commitment.", "Uses the existing plan.", "Requires clear communication about attendance."], [rule("prepared", true, "achievement", -3, "The required work is already complete.")]),
       option("partial", "Attend part", "Include the real travel time and remaining work.", scores(2, 0, 1, 2), ["Splits available time across commitments.", "Travel still consumes time.", "Explores a different attendance format.", "Includes some family contact."], [], ["partialPossible"]),
     ], reflection: "Which trade-off mattered to you after the event?",
+  },
+  {
+    id: "family-time", version: 1, title: "Making time for family",
+    summary: "Compare spending time together now with arranging time together later.",
+    example: "I want to spend time with family.",
+    routing: [["family", "relative", "relatives", "parents", "siblings"]],
+    questions: {
+      availableNow: "Is your family available to spend time together now?",
+      laterAgreed: "Have you agreed on a later time that works for everyone?",
+    },
+    options: [
+      option("together", "Spend time together now", "Include time together and any travel.", scores(1, 0, 1, 3), ["Uses the time available now.", "You can agree on a pace that suits everyone.", "Makes room for a shared activity.", "Makes space for family time today."], [], ["availableNow"]),
+      option("later", "Plan time together later", "Use this slot to organise a time that works for everyone.", scores(3, 2, 0, 1), ["Keeps the time together separate from this slot.", "Leaves more flexibility in your day.", "Gives you time to plan what to do together.", "A date in the diary gives everyone something concrete to plan around."], [rule("laterAgreed", true, "connection", 2, "You’ve agreed on a time that works for everyone.")]),
+    ], reflection: "Did the plan make it easier to spend time together?",
   },
   {
     id: "scrolling-break", version: 1, title: "Scrolling break or next task",

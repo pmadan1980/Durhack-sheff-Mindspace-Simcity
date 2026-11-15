@@ -5,6 +5,7 @@ const clip = (file: string, side: 0 | 1, action: string): ArtFrame => ({ file:`$
 const rest: ArtFrame = { file:"rest.png",action:"Taking time to rest" };
 const work = clip("reference",0,"Making progress on your own work");
 const friend = clip("reference",1,"Meeting your friend");
+export const familyArtwork = clip("family", 0, "Spending time with family");
 export const taskArtwork: Record<TaskType,ArtFrame> = {
   presentation:clip("presentation",0,"Rehearsing your presentation"), assignment:work,
   report:clip("polish",0,"Writing your report"), project:clip("tools",1,"Building your project"),
@@ -22,6 +23,7 @@ export const scenarioVisuals: Record<string,Record<string,ArtFrame[]>> = {
   "drained-invitation": { attend:[friend], rest:[rest], short:[friend,rest] },
   "team-boundaries": { accept:[clip("boundaries",0,"Taking on the extra work")], boundary:[clip("tools",0,"Keeping your current scope")], redistribute:[clip("boundaries",1,"Agreeing a smaller shared plan")] },
   "family-deadline": { attend:[clip("family",0,"Making time for family")], project:[clip("family",1,"Protecting project time")], partial:[clip("family",0,"Attending part of the occasion"),clip("family",1,"Returning to the project")] },
+  "family-time": { together:[familyArtwork], later:[{file:"empty.png",action:"Arranging a time to get together"}] },
   "scrolling-break": { continue:[clip("scroll",0,"Choosing a bounded scrolling break")], restart:[clip("scroll",1,"Starting one small task")], different:[rest] },
   "new-club": { join:[clip("club",0,"Joining the new activity")], defer:[clip("club",1,"Keeping your current commitments")], trial:[clip("club",0,"Trying one session"),clip("club",1,"Reviewing your commitments")] },
   "housemate-conversation": { talk:[clip("housemates",0,"Making a calm, specific request")], schedule:[clip("housemates",1,"Preparing what to say"),clip("housemates",0,"Talking at the agreed time")], message:[clip("housemates",1,"Writing a neutral request")] },

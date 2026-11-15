@@ -75,6 +75,9 @@ interface Props {
   journey: Journey;
   dispatch: Dispatch<JourneyAction>;
   thought: string;
+  matchedScenarioTitle?: string;
+  parallelScenarioId?: string;
+  familyTime?: boolean;
   soundOn: boolean;
   solo: District | null;
   onSound: () => void;
@@ -91,10 +94,6 @@ interface Props {
   horizon: { day: number; a: Round[]; b: Round[] } | null;
   unfold: number;
   onUnfold: (i: number) => void;
-  mix: number;
-  onMix: (x: number) => void;
-  loops: boolean;
-  onLoops: (on: boolean) => void;
 }
 
 export default function JourneyStage(props: Props) {
@@ -118,7 +117,7 @@ export default function JourneyStage(props: Props) {
   const wide = j.scene === "voting";
   return (
     <>
-      <JourneyCinema scene={j.scene} thought={props.thought} day={day} policy={j.locked?.proposals[j.locked.election.winner] ?? w.history.at(-1)?.policy} memories={w.history} soundOn={props.soundOn} rules={c} previews={props.horizon ? [props.horizon.a[0],props.horizon.b[0]] : undefined} />
+      {j.scene === "summary" && <JourneyCinema scene={j.scene} thought={props.thought} day={day} policy={j.locked?.proposals[j.locked.election.winner] ?? w.history.at(-1)?.policy} memories={w.history} soundOn={props.soundOn} rules={c} familyTime={props.familyTime} previews={props.horizon ? [props.horizon.a[0],props.horizon.b[0]] : undefined} />}
       <nav className="journey-strip" aria-label="Journey progress">
         <span className="journey-day">
           DAY <b>{Math.min(day, lastGuidedDay(c))}</b> / {lastGuidedDay(c)}
@@ -194,19 +193,8 @@ function Primary({ label, onClick, disabled, note }: { label: string; onClick: (
 }
 
 const hasVisit = (c: Config) => c.connectionLastOpenDay > 0;
-const visitPhrase = (c: Config) =>
-  !hasVisit(c)
-    ? ""
-    : c.connectionLastOpenDay === 1
-      ? "Your friend is only here today."
-      : `Your friend is here until the end of day ${c.connectionLastOpenDay}.`;
-const deadlinePhrase = (c: Config) =>
-  c.taskDeadlineDay === 1
-    ? taskText(c, "Your presentation is due at the end of today.")
-    : taskText(c, `Your presentation is due in ${c.taskDeadlineDay} days.`);
-
 /** The single place to confirm or change the authored scenario's assumptions. */
-function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
+function Clarify({ journey: j, dispatch, thought, matchedScenarioTitle, advance }: SceneProps) {
   const s = j.setup;
   const c = j.world.rules;
   const from = thoughtSignals(thought);
@@ -215,15 +203,15 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
     if (next.visitLastDay > next.taskDeadlineDay) next.visitLastDay = next.taskDeadlineDay;
     dispatch({ type: "assume", setup: next });
   };
-  const tag = (mine: boolean, words?: string) => (
+  const tag = (mine: boolean) => (
     <span className={`answer-tag ${mine ? "from-words" : ""}`}>
-      {mine ? `From your words: “${words}”` : "Suggested assumption"}
+      {mine ? "Suggested from your thought" : "Editable default"}
     </span>
   );
   return (
     <>
-      <span className="cosmic-eyebrow">BEFORE WE START · A FEW QUESTIONS</span>
-      <h2 tabIndex={-1}>Let’s get your situation right.</h2>
+      <span className="cosmic-eyebrow">{matchedScenarioTitle ?? "Your scenario"}</span>
+      <h2 tabIndex={-1}>Check your starting point</h2>
       {thought && <blockquote className="thought-quote">“{thought}”</blockquote>}
 
       <fieldset className="choice-set">
@@ -237,7 +225,7 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
       </fieldset>
       <fieldset className="choice-set">
         <legend>{taskText(c, "When is the presentation due?")}</legend>
-        {tag(false)}
+        {tag(from.deadline !== undefined)}
         <div className="chip-row">
           {Array.from({ length: maxDeadlineDay }, (_, i) => i + 1).map((d) => (
             <button key={d} aria-pressed={s.taskDeadlineDay === d} onClick={() => set({ taskDeadlineDay: d })}>
@@ -246,12 +234,12 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
           ))}
         </div>
       </fieldset>
-      {(from.visit || s.visitLastDay > 0) && <fieldset className="choice-set">
-        <legend>Is a visit competing for your time?</legend>
-        {from.visit && s.visitLastDay > 0 && tag(true, "friend / visit")}
+      <fieldset className="choice-set">
+        <legend>Is time with someone competing for your time?</legend>
+        {from.visit && s.visitLastDay > 0 && tag(true)}
         <div className="chip-row">
           <button aria-pressed={s.visitLastDay > 0} onClick={() => set({ visitLastDay: Math.max(1, s.visitLastDay || 1) })}>
-            Yes, a friend’s visit
+            Yes, time together
           </button>
           <button aria-pressed={s.visitLastDay === 0} onClick={() => set({ visitLastDay: 0 })}>{taskText(c, " No, just the presentation ")}</button>
         </div>
@@ -265,10 +253,10 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
             </select>
           </label>
         )}
-      </fieldset>}
+      </fieldset>
       <fieldset className="choice-set">
         <legend>{taskText(c, "How far along is the presentation?")}</legend>
-        {tag(from.prepared, "almost done")}
+        {tag(from.prepared)}
         <label className="inline-field">
           <input type="range" min={0} max={j.world.rules.taskGoal} step={1} value={Math.min(s.taskProgress, j.world.rules.taskGoal)}
             onChange={(e) => set({ taskProgress: +e.target.value })} />
@@ -277,19 +265,19 @@ function Clarify({ journey: j, dispatch, thought, advance }: SceneProps) {
       </fieldset>
       <fieldset className="choice-set">
         <legend>How much energy do you have right now?</legend>
-        {tag(from.tired, "exhausted / tired")}
+        {tag(from.tired)}
         <label className="inline-field">
           <input type="range" min={0} max={s.energyCap} step={1} value={s.energy}
             onChange={(e) => set({ energy: +e.target.value })} />
           <b>{s.energy} / {s.energyCap} tokens</b>
         </label>
       </fieldset>
-      <Primary label="Confirm and see the briefing" onClick={() => advance("clarify")} />
+      <Primary label="Confirm setup" onClick={() => advance("clarify")} />
     </>
   );
 }
 
-function Briefing({ journey: j, dispatch, thought, advance }: SceneProps) {
+function Briefing({ journey: j, dispatch, advance }: SceneProps) {
   const w = j.world, c = w.rules;
   const start = actionState(w.state, c);
   const prev = w.history.at(-1);
@@ -298,13 +286,10 @@ function Briefing({ journey: j, dispatch, thought, advance }: SceneProps) {
   return (
     <>
       <span className="cosmic-eyebrow">DAY {w.state.day} OF {c.taskDeadlineDay} · BRIEFING</span>
-      <h2 tabIndex={-1}>{first ? "Here is the dilemma." : "A new day. Here's what changed."}</h2>
+      <h2 tabIndex={-1}>{first ? "Today’s priorities" : "A new day"}</h2>
       {first ? (
         <>
-          {thought && <blockquote className="thought-quote">“{thought}”</blockquote>}
-          <p className="stage-lede">
-            {deadlinePhrase(c)} {visitPhrase(c)} You have {c.dailyBudget} blocks to spend today, and limited energy.
-          </p>
+          <p className="stage-lede">The residents will debate how to spend today’s {c.dailyBudget} time blocks.</p>
         </>
       ) : (
         <ul className="since-list">
@@ -345,7 +330,7 @@ function Briefing({ journey: j, dispatch, thought, advance }: SceneProps) {
           </button>
         </div>
       )}
-      <Primary label={first ? "Meet your voices" : "Hear the debate"} onClick={() => advance("briefing")} />
+      <Primary label="Hear the debate" onClick={() => advance("briefing")} />
     </>
   );
 }
@@ -590,7 +575,12 @@ function Broadcast({ journey: j, dispatch, advance }: SceneProps) {
         <span className="cosmic-eyebrow">DAY {locked.day} · ELECTION NIGHT</span>
         <b className="counted">{j.revealed} / {total} <small>ballots counted</small></b>
       </div>
-      <h2 tabIndex={-1}>The residents are voting.</h2>
+      <h2 tabIndex={-1}>{final ? "Election result" : "Counting the votes"}</h2>
+      {final && <div className="election-winner" role="status">
+        <span>{locked.election.tied ? "Selected after a tie" : "Winning plan"}</span>
+        <strong>{locked.proposals[locked.election.winner].name}</strong>
+        <b>{counts[locked.election.winner]} of {total} votes</b>
+      </div>}
       <div className="bars">
         {locked.proposals.map((p, i) => (
           <div key={p.id} className={`bar-row ${final && i === locked.election.winner ? "bar-winner" : lead.includes(i) ? "bar-leading" : ""}`}
@@ -605,6 +595,7 @@ function Broadcast({ journey: j, dispatch, advance }: SceneProps) {
           </div>
         ))}
       </div>
+      <details className="ballot-disclosure"><summary>Inspect individual ballots</summary>
       <div className="residents-grid" aria-label="Resident ballots">
         {order.map((r, k) => {
           const ballot = locked.election.ballots[r];
@@ -621,15 +612,14 @@ function Broadcast({ journey: j, dispatch, advance }: SceneProps) {
         })}
       </div>
       <div ref={profile}>{b && <ResidentCard ballot={b} index={resident!} proposals={locked.proposals} />}</div>
+      </details>
       {final&&dominated.length>0&&<details className="election-context"><summary>Why didn’t every plan get votes?</summary>{dominated.map(pair=><p key={pair.plan}>“{pair.plan}” is matched or beaten by “{pair.other}” on every outcome we compare for this starting situation.</p>)}</details>}
-      <ul className="commentary">
-        {notes.map((n) => <li key={n}>{n}</li>)}
-      </ul>
+      {notes.length > 0 && <details><summary>Counting highlights</summary><ul className="commentary">{notes.map(n => <li key={n}>{n}</li>)}</ul></details>}
       <p className="sr-only" aria-live="polite">
         {final ? `Final: ${locked.proposals.map((p, i) => `${p.name} ${locked.election.counts[i]}`).join(", ")}.` : ""}
       </p>
       {final ? (
-        <Primary label="See the result" onClick={() => advance("voting")} />
+        <Primary label="See the winning plan" onClick={() => advance("voting")} />
       ) : (
         <div className="stage-action split">
           <button className="secondary small" onClick={() => dispatch({ type: "count", on: !j.counting })}>
@@ -673,7 +663,7 @@ function Result({ journey: j, advance, onSpeaker, onReact }: SceneProps) {
   const c = j.world.rules;
   const e = locked.election;
   const w = locked.proposals[e.winner];
-  const lines = reactions(e.winner, locked.proposals, locked.start, c);
+  const lines = useMemo(() => reactions(e.winner, locked.proposals, locked.start, c), [e.winner, locked, c]);
   const f = forecasts(locked.start, [w], c)[0];
   useEffect(() => { onSpeaker(lines[0].speaker === "N" ? null : lines[0].speaker); return () => onSpeaker(null); }, [lines, onSpeaker]);
   const committed = !!roundFor(j.world.history, locked.day);
@@ -687,18 +677,21 @@ function Result({ journey: j, advance, onSpeaker, onReact }: SceneProps) {
   return (
     <>
       <span className="cosmic-eyebrow">DAY {locked.day} · RESULT</span>
-      <h2 tabIndex={-1}>{w.name} wins, {e.counts[e.winner]} of {e.ballots.length}.</h2>
+      <h2 tabIndex={-1}>{e.tied ? "Election tied" : "The winning plan"}</h2>
+      <div className="election-winner">
+        <strong>{w.name}</strong><b>{e.counts[e.winner]} of {e.ballots.length} votes</b>
+      </div>
       {e.tied && <p className="stage-note">It was a tie at {e.counts[e.winner]}. The model gives ties to the first-listed plan.</p>}
       <div className="winner-card" style={{ "--plan": districtInfo[planAccent(w, locked.proposals)].color } as CSSProperties}>
         <Tokens policy={w} />
         <p>
-          This plan governs today's {c.dailyBudget} blocks: {allocationText(w)}. Forecast:
-          +{fmt(f.taskGain)}{taskText(c, " presentation, ")}{f.connectionOpen ? `+${fmt(f.connectionGain)} visit, ` : ""}{signed(f.energyDelta)} energy{f.methodGain > 0 ? `, ${signed(f.methodGain, 2)}× method from tomorrow` : ""}.
+          +{fmt(f.taskGain)} {c.taskType} points
+          {f.connectionOpen && ` · +${fmt(f.connectionGain)} visit`}
+          {` · ${signed(f.energyDelta)} energy`}
+          {f.methodGain > 0 && ` · ${signed(f.methodGain, 2)}× method tomorrow`}
         </p>
       </div>
-      <ol className="transcript">
-        {lines.map((l, i) => <TranscriptLine key={i} line={l} current={i === 0} />)}
-      </ol>
+      <details><summary>Hear the voices’ reactions</summary><ol className="transcript">{lines.map((l, i) => <TranscriptLine key={i} line={l} current={i === 0} />)}</ol></details>
       <Primary label="Watch today's consequences" onClick={() => advance("result")} note={committed ? "Already resolved: this replays the recorded day." : undefined} />
     </>
   );
@@ -747,7 +740,7 @@ function Consequences({ journey: j, advance, dispatch, onFocus, soundOn, onSound
     <>
       <span className="cosmic-eyebrow">DAY {r.before.day} · CONSEQUENCES</span>
       <h2 tabIndex={-1}>What {r.policy.name} changed.</h2>
-      <p className="stage-lede">The {c.dailyBudget} time blocks flew to their districts. Time blocks, energy tokens, points and the method multiplier are different resources.</p>
+      <p className="stage-lede">Select a resource to see why it changed.</p>
       <table className="ledger">
         <thead><tr><th>Resource</th><th>Before</th><th>Change</th><th>After</th></tr></thead>
         <tbody>
@@ -890,27 +883,27 @@ function Branch({ journey: j, onBranch, advance }: SceneProps) {
   );
 }
 
-function SideBySide({ journey: j, horizon, unfold, onUnfold, advance, ...props }: SceneProps) {
+function SideBySide({ journey: j, horizon, unfold, onUnfold, parallelScenarioId, familyTime, advance }: SceneProps) {
   const [catalogue,setCatalogue]=useState(false);
   if (!horizon) return null;
   const i = Math.min(unfold, horizon.a.length - 1);
   return <>
     <span className="cosmic-eyebrow">PARALLEL WORLDS · DAY {horizon.a[i].before.day}</span>
     {!catalogue && <h2 tabIndex={-1}>One decision. Two living futures.</h2>}
-    <ParallelWorlds a={horizon.a[i]} b={horizon.b[i]} rules={j.world.rules} mix={props.mix} onMix={props.onMix} playing={props.loops} onPlaying={props.onLoops} soundOn={props.soundOn} onSound={props.onSound} solo={props.solo} onSolo={props.onSolo} mixer={true} onScenarioChange={setCatalogue} />
+    <ParallelWorlds a={horizon.a[i]} b={horizon.b[i]} rules={j.world.rules} matchedScenarioId={parallelScenarioId} familyTime={familyTime} onScenarioChange={setCatalogue} />
     {!catalogue && (i < horizon.a.length - 1
       ? <Primary label={`Follow the ripples into day ${horizon.a[i + 1].before.day}`} onClick={() => onUnfold(i + 1)} />
       : <Primary label="Reflect on these paths" onClick={() => advance("comparison")} />)}
   </>;
 }
 
-function Listen({ journey: j, horizon, advance, ...props }: SceneProps) {
+function Listen({ journey: j, horizon, parallelScenarioId, familyTime, advance }: SceneProps) {
   const [catalogue,setCatalogue]=useState(false);
   if (!horizon) return null;
   return <>
-    <span className="cosmic-eyebrow">PARALLEL WORLDS · THE COMPOSITION</span>
-    {!catalogue && <h2 tabIndex={-1}>Feel the difference.</h2>}
-    <ParallelWorlds a={horizon.a.at(-1)!} b={horizon.b.at(-1)!} rules={j.world.rules} mix={props.mix} onMix={props.onMix} playing={props.loops} onPlaying={props.onLoops} soundOn={props.soundOn} onSound={props.onSound} solo={props.solo} onSolo={props.onSolo} onScenarioChange={setCatalogue} />
+    <span className="cosmic-eyebrow">PARALLEL WORLDS</span>
+    {!catalogue && <h2 tabIndex={-1}>Compare both paths.</h2>}
+    <ParallelWorlds a={horizon.a.at(-1)!} b={horizon.b.at(-1)!} rules={j.world.rules} matchedScenarioId={parallelScenarioId} familyTime={familyTime} onScenarioChange={setCatalogue} />
     {!catalogue && <Primary label="Take the story with you" onClick={() => advance("listen")} />}
   </>;
 }

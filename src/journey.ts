@@ -38,12 +38,11 @@ export type Scene =
   | "free";
 
 export const storySteps: { scene: Scene; label: string }[] = [
-  { scene: "clarify", label: "Your answers" },
-  { scene: "briefing", label: "Briefing" },
-  { scene: "introductions", label: "Voices" },
+  { scene: "clarify", label: "Setup" },
+  { scene: "briefing", label: "Today" },
   { scene: "debate", label: "Debate" },
-  { scene: "intervention", label: "Your edit" },
-  { scene: "voting", label: "Polls" },
+  { scene: "intervention", label: "Plans" },
+  { scene: "voting", label: "Vote" },
   { scene: "result", label: "Result" },
   { scene: "consequences", label: "Consequences" },
   { scene: "reflection", label: "Reflection" },
@@ -164,7 +163,7 @@ export function previousScene(j: Journey): Scene | null {
     case "clarify": return "thought";
     case "briefing": return j.world.history.length ? "reflection" : "clarify";
     case "introductions": return "briefing";
-    case "debate": return j.world.state.day === 1 && !j.world.history.length ? "introductions" : "briefing";
+    case "debate": return "briefing";
     case "intervention": return "debate";
     case "voting": return "intervention";
     case "result": return "voting";
@@ -267,8 +266,7 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
         case "briefing":
           return {
             ...j,
-            scene:
-              day === 1 && w.history.length === 0 ? "introductions" : "debate",
+            scene: "debate",
             line: 0,
           };
         case "introductions":

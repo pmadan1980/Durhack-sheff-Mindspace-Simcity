@@ -1,4 +1,4 @@
-import { taskArtwork } from "./scenarioVisuals";
+import { familyArtwork, taskArtwork } from "./scenarioVisuals";
 import type { CSSProperties } from "react";
 import { districtInfo, type Config, type District, type Round } from "./simulation";
 import { activityAt, activityCopy, sceneProfiles } from "./planPlayback";
@@ -6,18 +6,20 @@ import { activityAt, activityCopy, sceneProfiles } from "./planPlayback";
 const art = "/art/parallel-clay/";
 const frames = ["work", "friend", "ideas", "rest", "empty"] as const;
 
-export default function EverydayScene({ round, rules, position, running, reduced, solo }: {
-  round: Round; rules: Config; position: number; running: boolean; reduced: boolean; solo: District | null;
+export default function EverydayScene({ round, rules, position, running, reduced, solo, familyTime = false }: {
+  round: Round; rules: Config; position: number; running: boolean; reduced: boolean; solo: District | null; familyTime?: boolean;
 }) {
   const active = activityAt(round,position);
   const frame = active === "C" ? (round.activity.connectionOpen && rules.connectionLastOpenDay > 0 ? "friend" : "empty") : active === "D" ? "ideas" : active === "R" ? "rest" : "work";
+  const connectionArtwork = familyTime ? familyArtwork : { file: "reference.png", side: 1 };
+  const workArtwork = taskArtwork[rules.taskType];
   const ready = position >= rules.dailyBudget && round.after.taskResult === true;
   return <div className={`everyday-scene clay-scene ${running ? "scene-running" : "scene-paused"} clay-${frame}`} data-reduced={reduced ? "true" : "false"}
-    role="img" aria-label={`${sceneProfiles[rules.taskType].work}: ${activityCopy(active,round,rules)}${ready ? ". Task complete." : ""}`}
+    role="img" aria-label={`${sceneProfiles[rules.taskType].work}: ${activityCopy(active,round,rules,familyTime)}${ready ? ". Task complete." : ""}`}
     style={{ "--scene-accent": districtInfo[solo ?? active ?? "A"].color } as CSSProperties}>
     {frames.map((name) => <div key={name} className={`clay-layer ${name === frame ? "clay-visible" : ""}`} aria-hidden="true">
       {name === "work" || name === "friend"
-        ? <div className={`clay-still clay-reference clay-reference-${name}`} style={{ backgroundImage:`url(${art}${name === "work" ? taskArtwork[rules.taskType].file : "reference.png"})`,backgroundPosition:(name === "work" ? taskArtwork[rules.taskType].side : 1) === 1 ? "right center" : "left center" }} />
+        ? <div className={`clay-still clay-reference clay-reference-${name}`} style={{ backgroundImage:`url(${art}${name === "work" ? workArtwork.file : connectionArtwork.file})`,backgroundPosition:(name === "work" ? workArtwork.side : connectionArtwork.side) === 1 ? "right center" : "left center" }} />
         : <img className="clay-still" src={`${art}${name}.png`} alt="" draggable={false} decoding="async" />}
     </div>)}
     <div className="clay-lamplight" aria-hidden="true" />

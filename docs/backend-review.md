@@ -61,7 +61,7 @@ All estimates must cover the entire plan and use the same planning horizon. An o
 
 ## Limits and remaining work
 
-This is an authored decision-support simulator, not trained AI or a separate HTTP server. Its comparison units are design choices, not empirical wellbeing scores or outcome probabilities. The 15 scenarios cover everyday dilemmas; unsupported subjects need explicit clarification rather than a forced match. The routing vocabulary is intentionally limited.
+This is an authored decision-support simulator, not trained AI or a separate HTTP server. Its comparison units are design choices, not empirical wellbeing scores or outcome probabilities. The scenario catalogue cover everyday dilemmas; unsupported subjects need explicit clarification rather than a forced match. The routing vocabulary is intentionally limited.
 
 Time checks currently cover aggregate capacity, not calendar scheduling, overlapping events or computed multi-day dependencies. Relevant scenario flags such as “visit available” and “split possible” must be confirmed by the caller. Energy is not predicted. Restorative effects use self-report; other people's reactions remain unknown. Reflection data is returned, not persisted. No community voting, authentication, local language model or machine learning is included.
 

@@ -1,4 +1,4 @@
-import { forecast, type Config, type Policy, type State } from "./simulation";
+import { fmt, forecast, type Config, type Policy, type State } from "./simulation";
 import type { Line } from "./dialogue";
 
 /** The main stage explains the same model; exact authored calculations stay in history. */
@@ -8,14 +8,14 @@ export function conversationLine(line:Line,start:State,policies:Policy[],rules:C
   const work=policies.reduce((best,p)=>p.allocation.A>best.allocation.A?p:best,policies[0]);
   if(line.speaker==="A"&&chosen&&result){
     if(start.taskProgress>=rules.taskGoal)return `Your ${rules.taskType} is already finished. We can focus on what else needs attention.`;
-    const progress=start.taskProgress+result.taskGain>=rules.taskGoal?`It could finish your ${rules.taskType} today.`:`It gives your ${rules.taskType} the most focused time today.`;
+    const progress=start.taskProgress+result.taskGain>=rules.taskGoal?`It could finish your ${rules.taskType} today.`:`It adds ${fmt(result.taskGain, 2)} points to your ${rules.taskType} today.`;
     return `I'd back ${chosen.name}. ${progress}${start.day===rules.taskDeadlineDay?" Today is the deadline.":""}`;
   }
   if(line.speaker==="C"){
     if(rules.connectionLastOpenDay===0)return "No visit is competing for time today. I'm listening to what the others need.";
     if(start.day>rules.connectionLastOpenDay)return "The visit has ended. Let's focus on the choices we still have.";
     if(chosen?.allocation.C===0)return "No current plan leaves time for the visit. We can change one before voting.";
-    if(chosen)return work.allocation.C===0?`That leaves no time for your friend. ${chosen.name} makes room for the visit.`:`We can work and still see your friend. ${chosen.name} protects time together.`;
+    if(chosen && result)return work.allocation.C===0?`That leaves no time to spend together. ${chosen.name} adds ${fmt(result.connectionGain, 2)} visit points.`:`We can make progress and still spend time together. ${chosen.name} adds ${fmt(result.connectionGain, 2)} visit points.`;
     return line.text;
   }
   if(line.speaker==="R"&&chosen&&result){
@@ -25,9 +25,9 @@ export function conversationLine(line:Line,start:State,policies:Policy[],rules:C
   }
   if(line.speaker==="D"){
     if(!chosen)return "No plan makes time to try a better approach. We could adjust one.";
-    if(start.method>=rules.methodCap)return "Changing the method won't improve our pace any further today.";
+    if(result?.methodGain === 0)return "Changing the method won't improve our pace any further today.";
     if(start.day>=rules.taskDeadlineDay)return `${chosen.name} invests in an easier way to work, but the benefit comes after this deadline.`;
-    return `${chosen.name} could make tomorrow's work easier. It won't speed up today's work.`;
+    return `${chosen.name} adds ${fmt(result?.methodGain ?? 0, 2)}× to the work method from tomorrow.`;
   }
   if(line.speaker==="N")return "We've heard the trade-offs. You can adjust the plans before the residents vote.";
   return line.text;

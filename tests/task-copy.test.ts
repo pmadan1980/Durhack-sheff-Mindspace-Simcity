@@ -15,7 +15,7 @@ function renderQuestions(taskType: typeof taskTypes[number]) {
     onSound: noop, onListen: noop, listening: false, onSolo: noop,
     onSpeaker: noop, onFocus: noop, onExplore: noop, onObservatory: noop,
     onRestart: noop, onBranch: noop, onReact: noop, horizon: null,
-    unfold: 0, onUnfold: noop, mix: 0.5, onMix: noop, loops: false, onLoops: noop,
+    unfold: 0, onUnfold: noop,
   };
   return renderToStaticMarkup(createElement(JourneyStage, props));
 }
@@ -44,4 +44,12 @@ describe("scenario-aware frontend options", () => {
     expect(setupForThought("I need to prepare for my exam", judgeSetup).taskType).toBe("exam preparation");
     expect(setupForThought("Something unfamiliar", judgeSetup).taskType).toBe("task");
   });
+});
+
+
+it("suggests a deadline without treating a friend mentioned in passing as a visit", () => {
+  const setup = setupForThought("My friend helped with my coursework. It is due tomorrow and I am not tired.", judgeSetup);
+  expect(setup).toMatchObject({ taskType: "assignment", taskDeadlineDay: 2, visitLastDay: 0, energy: judgeSetup.energy });
+  expect(setupForThought("My slides are due tonight, but my friend is only here today.", judgeSetup))
+    .toMatchObject({ taskType: "presentation", taskDeadlineDay: 1, visitLastDay: 1 });
 });

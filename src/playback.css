@@ -44,3 +44,11 @@
 .playback-clock > strong { font-size: 24px; }
 .playback-clock { margin-bottom: 5px; }
 .playback-caption { margin: 3px 0 8px; min-height: 18px; }
+
+.parallel-cinema .playback-scene { transition:filter .7s ease; }
+.parallel-cinema[data-day-phase="morning"] .playback-scene { filter:brightness(.96) saturate(.92); }
+.parallel-cinema[data-day-phase="midday"] .playback-scene { filter:brightness(1.08); }
+.parallel-cinema[data-day-phase="evening"] .playback-scene { filter:brightness(.88) saturate(1.08); }
+
+.scenario-playback .clay-layer { transform:scale(var(--playback-zoom, 1)); }
+@media(prefers-reduced-motion:reduce) { .parallel-cinema .playback-scene { transition:none; } }

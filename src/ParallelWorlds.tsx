@@ -1,123 +1,130 @@
+import { useState, type CSSProperties, type FormEvent } from "react";
+import { motion } from "motion/react";
+import { Sparkles } from "lucide-react";
+import ParallelTimeline, { playbackPhase, playbackTransition, useParallelTimeline } from "./ParallelTimeline";
 import ScenarioPlayback from "./ScenarioPlayback";
 import { inheritedScenarioFacts } from "./scenarioVisuals";
-import { listScenarios } from "./engine";
+import { listScenarios, routeThought } from "./engine";
 import VoiceIcon from "./VoiceIcon";
 import EverydayScene from "./EverydayScene";
 import { activityAt, activityCopy, planTrack, splitBlock, tileLabel } from "./planPlayback";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Headphones, Pause, Play, Sparkles } from "lucide-react";
-import { districtInfo, districts, fmt, type Config, type District, type Round } from "./simulation";
-import { impactMoments, sameWorld, worldCaption } from "./parallelStory";
+import { districtInfo, type Config, type Round } from "./simulation";
+import { comparisonMeasures, sameState } from "./parallelStory";
 
 interface Props {
-  a: Round; b: Round; rules: Config;
-  mix: number; onMix: (n: number) => void;
-  playing: boolean; onPlaying: (v: boolean) => void;
-  soundOn: boolean; onSound: () => void;
-  solo: District | null; onSolo: (d: District | null) => void;
-  mixer?: boolean;
+  a: Round;
+  b: Round;
+  rules: Config;
+  matchedScenarioId?: string;
+  familyTime?: boolean;
   onScenarioChange?: (catalogue: boolean) => void;
 }
-function Attention({ a, b, rules, running }: { a: Round; b: Round; rules: Config; running: boolean }) {
-  const moments = useMemo(() => impactMoments(a, b, rules), [a, b, rules]);
-  const [index, setIndex] = useState(0);
-  const reduced = useReducedMotion();
-  const i = Math.min(index, moments.length - 1);
-  useEffect(() => {
-    if (!running || i >= moments.length - 1) return;
-    const timer = window.setTimeout(() => setIndex((n) => n + 1), 7500);
-    return () => window.clearTimeout(timer);
-  }, [running, i, moments.length]);
-  const moment = moments[i];
-  return <div className="future-attention" style={{ "--impact": districtInfo[moment.district].color } as CSSProperties}>
-    <span className="attention-kicker"><Sparkles size={13} /> {moment.id === "converge" ? "THE STORY SO FAR" : "ATTENTION · A TURNING POINT"}</span>
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div key={moment.id} role="status" aria-live="polite" initial={{ opacity: 0, y: reduced ? 0 : 7 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduced ? 0 : -5 }} transition={{ duration: 0.4 }}>
-        <strong>{moment.title}</strong><p>{moment.detail}</p>
-      </motion.div>
-    </AnimatePresence>
-    {moments.length > 1 && <div className="impact-dots" aria-label="Story moments">{moments.map((m, n) => <button key={m.id} aria-label={`Show moment: ${m.title}`} aria-pressed={i === n} onClick={() => setIndex(n)}><span /></button>)}</div>}
-  </div>;
-}
 
-export default function ParallelWorlds(props: Props) {
-  const [situation,setSituation]=useState("current");
+export default function ParallelWorlds({ a, b, rules, matchedScenarioId, familyTime, onScenarioChange }: Props) {
+  const [situation, setSituation] = useState("current");
+  const [query, setQuery] = useState("");
+  const [matches, setMatches] = useState<string[] | null>(null);
+  const scenarios = listScenarios();
+  const matchedScenario = scenarios.find(scenario => scenario.id === matchedScenarioId);
+  function findSituation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const ids = routeThought(query).candidates.map(candidate => candidate.id);
+    setMatches(ids);
+    if (ids.length === 1) chooseSituation(ids[0]);
+  }
+  function chooseSituation(id: string) {
+    setSituation(id);
+    onScenarioChange?.(id !== "current");
+  }
+  if (situation !== "current") {
+    return <ScenarioPlayback key={situation} scenarioId={situation}
+      initialFacts={inheritedScenarioFacts(situation, rules, a.before.day)}
+      onBack={() => {
+        setQuery("");
+        setMatches(null);
+        chooseSituation("current");
+      }} />;
+  }
   return <>
-    <div className="scenario-picker"><label>Situation<select aria-label="Situation" value={situation} onChange={e=>{props.onPlaying(false);setSituation(e.target.value);props.onScenarioChange?.(e.target.value!=="current");}}><option value="current">Your current story</option>{listScenarios().map(s=><option key={s.id} value={s.id}>{s.title}</option>)}</select></label></div>
-    {situation === "current" ? <PlanPlayback key={`${props.a.id}:${props.b.id}`} {...props} /> : <ScenarioPlayback key={situation} scenarioId={situation} initialFacts={inheritedScenarioFacts(situation,props.rules,props.a.before.day)} onBack={()=>{setSituation("current");props.onScenarioChange?.(false);}} />}
+    <PlanComparison key={JSON.stringify([a.id, b.id, a.policy.allocation, b.policy.allocation])} a={a} b={b} rules={rules} familyTime={familyTime} />
+    {matchedScenario && <button type="button" className="secondary small" onClick={() => chooseSituation(matchedScenario.id)}>
+      Compare {matchedScenario.title}
+    </button>}
+    <details className="future-inspect compare-scenarios">
+      <summary>Try a different situation</summary>
+      <form className="compare-scenario-search" onSubmit={findSituation}>
+        <label>Find a situation <input type="search" value={query} maxLength={10000}
+          placeholder="e.g. time with family" onChange={e => { setQuery(e.target.value); setMatches(null); }} /></label>
+        <button className="secondary small" disabled={!query.trim()}>Find</button>
+      </form>
+      {matches && <p role="status">{matches.length === 0 ? "No match. Add a detail or pick a situation below." :
+        matches.length > 1 ? "Several situations fit. Pick one below." : "One match found."}</p>}
+      <label>Situation <select aria-label="Situation" value={situation} onChange={e => chooseSituation(e.target.value)}>
+        <option value="current">Your current story</option>
+        {scenarios.filter(s => !matches?.length || matches.includes(s.id))
+          .map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+      </select></label>
+    </details>
   </>;
 }
 
-function PlanPlayback({ a,b,rules,mix,onMix,playing,onPlaying,soundOn,onSound,solo,onSolo,mixer=true }: Props) {
-  const reduced = !!useReducedMotion();
-  const [hidden,setHidden] = useState(false);
-  const [position,setPosition] = useState(0);
-  const playhead = useRef(0);
-  const [started,setStarted] = useState(false);
+function PlanComparison({ a, b, rules, familyTime }: Pick<Props, "a" | "b" | "rules" | "familyTime">) {
   const budget = rules.dailyBudget;
-  const ended = position >= budget;
-  const firstSplit = splitBlock(a,b);
-  const shared = sameWorld({ ...a,after:a.before },{ ...b,after:b.before });
-  const split = true;
-  const running = started && playing && !hidden && !reduced && !ended;
-  const seek = (n: number) => { playhead.current=n; setPosition(n); };
-  useEffect(() => {
-    const update = () => setHidden(document.hidden);
-    update(); document.addEventListener("visibilitychange",update);
-    return () => document.removeEventListener("visibilitychange",update);
-  },[]);
-  useEffect(() => {
-    if (!started || !playing || hidden || reduced) return;
-    let frame=0, previous=0;
-    const tick = (now: number) => {
-      if (!previous) previous=now;
-      const dt=now-previous;
-      if (dt >= 1000/30) {
-        previous=now;
-        const next=Math.min(budget,playhead.current + Math.min(dt,100)/1500);
-        playhead.current=next; setPosition(next);
-        if (next >= budget) { setStarted(false); return; }
-      }
-      frame=requestAnimationFrame(tick);
-    };
-    frame=requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  },[started,playing,hidden,reduced,budget]);
-  const start = () => {
-    if (reduced) { seek(budget); return; }
-    if (ended) { seek(0); }
-    setStarted(true); onPlaying(true);
-  };
-  const caption = ended ? "See what this choice left behind." : position === 0 ? "Same start. One different plan." : split ? `What happened: ${activityCopy(activityAt(a,position),a,rules)}. Your alternative: ${activityCopy(activityAt(b,position),b,rules)}.` : `Both paths: ${activityCopy(activityAt(a,position),a,rules)}.`;
-  return <div className={`parallel-cinema plan-playback ${running ? "is-running" : "is-paused"}`} data-reduced={reduced ? "true" : "false"}>
-    <section className="playback-controls" aria-label="Plan playback controls">
-      <div className="playback-clock"><span>DAY {a.before.day}</span><strong>{position === 0 ? "Before the choice" : ended ? "The day’s outcome" : `Block ${Math.min(budget,Math.max(1,Math.ceil(position)))} of ${budget}`}</strong></div>
-      <div className="playback-scrub"><input type="range" min="0" max={budget} step="0.01" value={position} aria-label="Scrub through the plans" aria-valuetext={position === 0 ? "Before the choice" : ended ? "Day complete" : `Partway through block ${Math.min(budget,Math.max(1,Math.ceil(position)))}`} onChange={(e) => { setStarted(false); onPlaying(false); seek(+e.target.value); }} />{firstSplit !== null && <i style={{ left:`${firstSplit / budget * 100}%` }} title="The plans first differ here" />}</div>
-      <p className="playback-caption">{caption}</p>
-      <div className="playback-actions">{running ? <button className="playback-primary" onClick={() => { setStarted(false);onPlaying(false); }}><Pause size={14} /> Pause</button> : <button className="playback-primary" onClick={start}><Play size={14} />{ended ? "Replay paths" : position > 0 ? "Continue" : "Compare paths"}</button>}
-        {!ended && <button onClick={() => {setStarted(false);seek(budget);}}>See the outcome</button>}
-        {!soundOn && <button onClick={() => {onSound();onPlaying(true);}}><Headphones size={14} /> Sound</button>}
+  const timeline = useParallelTimeline(budget * 1500, 0);
+  const position = timeline.progress * budget;
+  const block = Math.ceil(position);
+  const firstSplit = splitBlock(a, b);
+  const ended = timeline.progress === 1;
+  const phase = playbackPhase(timeline.progress);
+  const phaseLabel = { morning: "Morning", midday: "Midday", evening: "Evening" }[phase];
+  const readout = block === 0 ? "Before the choice" : ended ? "The day’s outcome" : `${phaseLabel} · Block ${block} of ${budget}`;
+  const stats = comparisonMeasures(a.after, b.after, rules);
+  const changes = stats.filter(stat => stat.changed);
+
+  return (
+    <section className="parallel-cinema plan-playback" aria-label="Compare both paths" data-day-phase={phase}>
+      <header className="compare-simple-header">
+        <div><h3>Day {a.before.day} outcomes</h3><p>{sameState(a.before, b.before) ? "Same starting point, two plans." : "See how the choices played out."}</p></div>
+      </header>
+      <ParallelTimeline timeline={timeline} label={`Day ${a.before.day}`} readout={readout}
+        split={firstSplit === null ? undefined : firstSplit / budget} />
+      <motion.div className="playback-stage is-split" layout={!timeline.reduced} transition={playbackTransition}>
+        {([["a", a, "What happened"], ["b", b, "Your alternative"]] as const).map(([side, round, label]) => (
+          <motion.article className="playback-world" key={side} layout={!timeline.reduced}
+            initial={side === "b" && !timeline.reduced ? { opacity: 0, scale: .96, x: -15 } : false}
+            animate={{ opacity: 1, scale: 1, x: 0 }} transition={playbackTransition}>
+            <header><span>{round.policy.name}</span><small>{label}</small></header>
+            <div className="playback-scene">
+              <EverydayScene round={round} rules={rules} position={position} running={timeline.playing} reduced={timeline.reduced} solo={null} familyTime={familyTime} />
+            </div>
+            <div className="playback-tiles" style={{ gridTemplateColumns: `repeat(${budget}, minmax(0, 1fr))` }} aria-label={`${label} time blocks`}>
+              {planTrack(round).map((district, index) => {
+                const filled = Math.max(0, Math.min(1, position - index));
+                return <div key={index} className={`playback-tile ${filled > 0 ? "is-used" : ""} ${timeline.progress < 1 && block === index + 1 ? "is-now" : ""}`}
+                  style={{ "--tile": districtInfo[district].color, "--fill": filled } as CSSProperties}>
+                  <i /><VoiceIcon d={district} size={23} /><span>{tileLabel(district, rules, familyTime)}</span>
+                </div>;
+              })}
+            </div>
+            {timeline.progress < 1 && <p className="playback-outcome">{activityCopy(activityAt(round, position), round, rules, familyTime)}</p>}
+          </motion.article>
+        ))}
+      </motion.div>
+      {!ended && firstSplit !== null && position > firstSplit && <div className="playback-turn">
+        <Sparkles size={15} aria-hidden="true" /><span>Here’s where the plans split.</span>
+      </div>}
+      <div className="compare-outcomes">
+        <h3>{changes.length ? "What changed" : "Both plans reach the same outcome"}</h3>
+        <table>
+          <thead><tr><th scope="col">Resource</th><th scope="col">Original</th><th scope="col">Alternative</th></tr></thead>
+          <tbody>{stats.map(stat => <tr key={stat.district} data-changed={stat.changed}>
+            <th scope="row"><span><VoiceIcon d={stat.district} size={21} />{familyTime && stat.district === "C" ? "Family time" : stat.label}</span></th>
+            {([stat.a, stat.b]).map((value, index) => <td key={index}>
+              {value.text}{value.result !== null && <small>{value.result ? "Met" : "Missed"}</small>}
+            </td>)}
+          </tr>)}</tbody>
+        </table>
       </div>
     </section>
-    <motion.div layout={!reduced} className={`playback-stage ${split ? "is-split" : ""}`} transition={{ duration:.65,ease:[.22,.8,.25,1] }}>
-      {([['a',a,'What happened'],['b',b,'Your alternative']] as const).filter(([id]) => id === 'a' || split).map(([id,r,title]) => <motion.article layout={!reduced} key={id} className={`playback-world world-${id}`} initial={id === 'b' && !reduced ? { opacity:0,scale:.96,x:-15 } : false} animate={{ opacity:1,scale:1,x:0 }} transition={{ duration:.65,ease:[.22,.8,.25,1] }}>
-        <header><span>{split ? title : "Both paths begin here"}</span><small>{r.policy.name}</small></header>
-        <div className="playback-scene" style={{ opacity:mixer && split ? .65 + (id === 'a' ? 1-mix : mix)*.35 : 1 }}><EverydayScene round={r} rules={rules} position={position} running={running} reduced={reduced} solo={solo} /></div>
-        <div className="playback-tiles" style={{ gridTemplateColumns:`repeat(${budget},minmax(0,1fr))` }} aria-label={`${title}: time blocks`}>
-          {planTrack(r).map((d,i) => {
-            const filled=Math.max(0,Math.min(1,position-i));
-            return <div className={`playback-tile ${filled > 0 ? 'is-used' : ''} ${position > i && position < i+1 ? 'is-now' : ''}`} key={i} style={{ '--tile':districtInfo[d].color,'--fill':filled } as CSSProperties} title={`Block ${i+1}: ${tileLabel(d,rules)}`}><i /><VoiceIcon d={d} size={23} /><span>{tileLabel(d,rules)}</span></div>;
-          })}
-        </div>
-        <p className="playback-outcome">{ended ? worldCaption(r,rules) : activityCopy(activityAt(r,position),r,rules)}</p>
-      </motion.article>)}
-    </motion.div>
-
-    {split && !ended && firstSplit !== null && position > firstSplit && <div className="playback-turn" role="status"><Sparkles size={15} /><span>Here’s where the plans split.</span></div>}
-    {ended && <Attention key={`${a.id}:${b.id}`} a={a} b={b} rules={rules} running={playing && !hidden && !reduced} />}
-    {mixer && split && <div className="future-mixer playback-mixer"><label htmlFor="future-blend">Listen between the paths</label><input id="future-blend" type="range" min="0" max="1" step="0.01" value={mix} aria-label="Explore both futures" onChange={(e) => onMix(+e.target.value)} /><div><button onClick={() => onMix(0)}>What happened</button><span>Colour & sound</span><button onClick={() => onMix(1)}>What if…</button></div></div>}
-    <details className="future-inspect"><summary>Explore the layers</summary><div className="future-legend">{districts.filter((d) => d !== 'C' || rules.connectionLastOpenDay > 0).map((d) => <button key={d} style={{ '--voice':districtInfo[d].color } as CSSProperties} aria-pressed={solo === d} onClick={() => onSolo(solo === d ? null : d)}>{districtInfo[d].name}<small>{solo === d ? 'Hear all layers' : 'Focus this layer'}</small></button>)}</div></details>
-    <details className="future-inspect"><summary>Exact outcomes</summary><table><thead><tr><th>Resource</th><th>What happened</th><th>Your alternative</th></tr></thead><tbody>{([['taskProgress',rules.taskType],['connectionProgress','Visit'],['energy','Energy'],['method','Method']] as const).filter(([key]) => key !== 'connectionProgress' || rules.connectionLastOpenDay > 0).map(([key,label]) => <tr key={key}><th>{label}</th><td>{fmt(a.after[key],2)}</td><td>{fmt(b.after[key],2)}</td></tr>)}</tbody></table></details>
-  </div>;
+  );
 }

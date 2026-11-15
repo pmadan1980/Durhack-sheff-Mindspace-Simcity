@@ -1,3 +1,4 @@
+import { getScenario, routeThought } from "./engine";
 import { BrainTransition } from "./BrainCinema";
 import ParallelWorlds from "./ParallelWorlds";
 import { taskText } from "./simulation";
@@ -60,6 +61,11 @@ export default function App() {
     initialJourney,
   );
   const [thought, setThought] = useState("");
+  const thoughtMatch = useMemo(() => routeThought(thought.slice(0, 10000)), [thought]);
+  const matchedScenario = useMemo(() => thoughtMatch.status === "candidate"
+    ? getScenario(thoughtMatch.candidates[0].id) : undefined, [thoughtMatch]);
+  const familyTime = thoughtMatch.candidates.some(({ id }) => id === "family-time" || id === "family-deadline");
+  const parallelScenarioId = matchedScenario?.id === "presentation-and-visit" ? undefined : matchedScenario?.id;
   const [thoughtArriving,setThoughtArriving]=useState(false);
   const [speaker, setSpeaker] = useState<District | null>(null);
   const [focus, setFocus] = useState<District | null>(null);
@@ -84,8 +90,6 @@ export default function App() {
   // A guided counterfactual covers the changed day through the last story day in both worlds.
   const [horizon, setHorizon] = useState<{ day: number; a: Round[]; b: Round[] } | null>(null);
   const [unfold, setUnfold] = useState(0);
-  const [mix, setMix] = useState(0.5);
-  const [comparePlaying, setComparePlaying] = useState(true);
   const [hiddenPause, setHiddenPause] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
@@ -152,7 +156,6 @@ export default function App() {
     const visibility = () => {
       if (document.hidden) {
         dispatch({ type: "pause" });
-        setComparePlaying(false);
         setHiddenPause(true);
         audio.stop();
         void audio.context?.suspend();
@@ -167,36 +170,15 @@ export default function App() {
     };
   }, []);
   useEffect(() => {
-    const priorA = history.find(
-      (r) => r.before.day === (pair?.a.before.day ?? 1) - 1,
-    );
-    const priorB = horizon?.b.find(
-      (r) => r.before.day === (pair?.b.before.day ?? 1) - 1,
-    ) ?? priorA;
-    audio.setFrame(
-      tab === "Compare" && pair
-        ? {
-            a: projectScore(pair.a.after, pair.a, priorA, c),
-            b: projectScore(pair.b.after, pair.b, priorB, c),
-          }
-        : { a: projectScore(state, last, history.at(-2), c) },
-    );
-  }, [state, last, history, c, tab, pair, horizon]);
+    audio.setFrame({ a: projectScore(state, last, history.at(-2), c) });
+  }, [state, last, history, c]);
   useEffect(() => {
-    audio.setMix(tab === "Compare" && pair ? mix : 0, solo, volume, muted);
-  }, [tab, pair, mix, solo, volume, muted]);
+    audio.setMix(0, solo, volume, muted);
+  }, [solo, volume, muted]);
   useEffect(() => {
-    audio.play(
-      entered &&
-        soundOn &&
-        !hiddenPause &&
-        (tab === "Compare" && pair
-          ? comparePlaying
-          : free
-            ? playing
-            : listening || (scene === "debate" && staged)),
-    );
-  }, [entered, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, scene, staged]);
+    audio.play(entered && soundOn && !hiddenPause && tab !== "Compare" &&
+      (free ? playing : listening || (scene === "debate" && staged)));
+  }, [entered, soundOn, hiddenPause, playing, tab, free, listening, scene, staged]);
   async function enableSound() {
     try {
       const enabled = await audio.enable();
@@ -215,6 +197,7 @@ export default function App() {
     }
   }
   function restart() {
+    setThought("");
     setThoughtArriving(false);
     setHorizon(null);
     audio.reset();
@@ -226,6 +209,7 @@ export default function App() {
     setRoom("headquarters");
   }
   function reset() {
+    setThought("");
     audio.reset();
     dispatch({ type: "reset", setup });
     dispatch({ type: "free" });
@@ -271,8 +255,6 @@ export default function App() {
     setHorizon({ day, ...r });
     setUnfold(0);
     setPair({ a: r.a[0], b: r.b[0] });
-    setMix(0.5);
-    setComparePlaying(true);
     setRoom("parallel");
   }
   function compare(round = selected) {
@@ -283,8 +265,6 @@ export default function App() {
     const alternative = round.policies.find((p) => p.id !== round.policy.id);
     if (!alternative) return;
     setPair({ a: structuredClone(round), b: branch(round, alternative.id, c) });
-    setMix(0.5);
-    setComparePlaying(true);
     setRoom("parallel");
   }
   function navigate(next: "World" | "Compare" | "Observatory") {
@@ -341,6 +321,7 @@ export default function App() {
         if (!soundOn && !muted) void enableSound();
         setThought(text);
         setThoughtArriving(true);
+        setHorizon(null);
         setPair(null);
         setSelectedDay(null);
         setSolo(null);
@@ -348,6 +329,7 @@ export default function App() {
         dispatch({ type: "begin", setup: next });
       }}
       onFree={() => {
+        setThought("");
         audio.reset();
         dispatch({ type: "reset", setup });
         dispatch({ type: "free" });
@@ -363,6 +345,9 @@ export default function App() {
             journey={journey}
             dispatch={dispatch}
             thought={thought}
+            matchedScenarioTitle={matchedScenario?.title}
+            parallelScenarioId={parallelScenarioId}
+            familyTime={familyTime}
             soundOn={soundOn && !muted}
             solo={solo}
             onSound={() => {
@@ -390,10 +375,6 @@ export default function App() {
               audio.reset();
               setPair({ a: horizon.a[i], b: horizon.b[i] });
             }}
-            mix={mix}
-            onMix={setMix}
-            loops={comparePlaying}
-            onLoops={setComparePlaying}
             onReact={(list) =>
               setReactions(list.map((r, i) => ({ ...r, key: performance.now() + i })))
             }
@@ -407,10 +388,10 @@ export default function App() {
           navigate("Compare");
           return;
         }
-        if (tab === "Compare") setComparePlaying(false);
         setRoom(next);
       }}
       onApply={(next) => {
+        setThought("");
         audio.reset();
         dispatch({ type: "reset", setup: next });
         if (free) dispatch({ type: "free" });
@@ -428,12 +409,11 @@ export default function App() {
         if (round) { setSelectedDay(day); compare(round); }
       }}
       onHelp={() => setHelp(true)}
-      playing={tab === "Compare" ? comparePlaying : playing}
+      playing={tab !== "Compare" && playing}
       frozen={tab === "Compare"}
       onPlay={() => {
         setHiddenPause(false);
-        if (tab === "Compare") setComparePlaying(!comparePlaying);
-        else dispatch({ type: playing ? "pause" : "play" });
+        if (tab !== "Compare") dispatch({ type: playing ? "pause" : "play" });
         if (!soundOn && audio.context) void enableSound();
       }}
       onStep={stepDay}
@@ -443,7 +423,7 @@ export default function App() {
         soundOn &&
         !muted &&
         volume > 0 &&
-        (tab === "Compare" ? comparePlaying : playing)
+        tab !== "Compare" && playing
       }
       soundOn={soundOn && !muted}
       onSound={() => {
@@ -464,8 +444,7 @@ export default function App() {
                   onClick={() => {
                     setHiddenPause(false);
                     void enableSound();
-                    if (tab === "Compare") setComparePlaying(true);
-                    else dispatch({ type: "play" });
+                    if (tab !== "Compare") dispatch({ type: "play" });
                   }}
                 >
                   Resume experience <Play size={13} />
@@ -673,7 +652,7 @@ export default function App() {
             {tab === "Compare" && pair && (
               <section className="compare-view">
                 <div className="section-heading"><div><span className="eyebrow">PARALLEL WORLDS</span><h1>One decision. Two living futures.</h1><p>The same starting point. A different choice.</p></div></div>
-                <ParallelWorlds a={pair.a} b={pair.b} rules={c} mix={mix} onMix={setMix} playing={comparePlaying} onPlaying={setComparePlaying} soundOn={soundOn && !muted} onSound={() => { setMuted(false); void enableSound(); }} solo={solo} onSolo={setSolo} />
+                <ParallelWorlds a={pair.a} b={pair.b} rules={c} matchedScenarioId={parallelScenarioId} familyTime={familyTime} />
                 <label className="parallel-policy-picker">Try another plan
                   <select aria-label="Alternative plan" value={horizon ? horizon.b[0].policy.id : pair.b.policy.id} onChange={(e) => {
                     audio.reset();

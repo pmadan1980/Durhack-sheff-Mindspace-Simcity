@@ -1,3 +1,4 @@
+import { listScenarios } from "./engine";
 import { BrainMotionContext } from "./brainMotion";
 import { introLine } from "./dialogue";
 import { taskText } from "./simulation";
@@ -122,6 +123,7 @@ export const locations = {
   },
 } as const;
 export type Location = keyof typeof locations;
+const demoScenarios = listScenarios();
 const chamberRoute = ["headquarters", "memory", "decision", "parallel", "observatory"] as const;
 
 function isTravelControl(target: EventTarget) {
@@ -607,6 +609,11 @@ export default function MindUniverse(props: Props) {
                         Almost done, feeling tired
                       </button>
                     </div>
+                    <details className="demo-thoughts">
+                      <summary>Try a demo prompt</summary>
+                      <div>{demoScenarios.map(scenario => <button type="button" key={scenario.id}
+                        className="text-button" onClick={() => setThought(scenario.example)}>{scenario.title}</button>)}</div>
+                    </details>
                     {props.free && (
                     <details className="thought-assumptions">
                       <summary>
@@ -860,21 +867,13 @@ export default function MindUniverse(props: Props) {
                   ).padStart(2, "0")}{" "}
                   <small>/ {rules.taskDeadlineDay}</small>
                 </span>
-                <button
-                  aria-label={
-                    props.frozen
-                      ? props.playing
-                        ? "Pause comparison loops"
-                        : "Play comparison loops"
-                      : props.playing
-                        ? "Pause world"
-                        : "Play world"
-                  }
-                  disabled={!props.frozen && isWorldComplete(state, rules)}
+                {!props.frozen && <button
+                  aria-label={props.playing ? "Pause world" : "Play world"}
+                  disabled={isWorldComplete(state, rules)}
                   onClick={props.onPlay}
                 >
                   {props.playing ? <Pause size={15} /> : <Play size={15} />}
-                </button>
+                </button>}
                 <button
                   aria-label="Step one day"
                   title={

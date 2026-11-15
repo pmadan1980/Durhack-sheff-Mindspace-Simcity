@@ -185,3 +185,50 @@
   .mind-universe.room-observatory .workspace { top: 28%; padding: 12px; }
   .observe-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.election-winner {
+  display: grid;
+  gap: 5px;
+  padding: 14px 18px;
+  margin: 8px 0 14px;
+  background: #e8b88022;
+  border: 1px solid #e8b88066;
+  border-radius: 14px;
+  color: #fff0dc;
+}
+.election-winner > span { font-size: 12px; color: #e8c6a9; }
+.election-winner > strong { font: 400 clamp(22px, 4vw, 32px) Georgia, serif; }
+.election-winner > b { color: #f4c990; font-variant-numeric: tabular-nums; }
+
+.compare-simple-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.compare-simple-header h3, .compare-outcomes h3 { margin: 0; color: #f7e9de; font: 400 21px Georgia, serif; }
+.compare-simple-header p { margin: 3px 0 0; font-size: 12px; color: #cfb9cb; }
+.compare-outcomes { margin-block: 13px; background: #271d2e; border-radius: 12px; padding: 12px; }
+.compare-outcomes table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
+.compare-outcomes th, .compare-outcomes td { padding: 5px; text-align: start; }
+.compare-outcomes tbody tr { border-top: 1px solid #e3bbab26; }
+.compare-outcomes tbody tr[data-changed="true"] { color: #f4d5ae; }
+.compare-outcomes th > span { display: flex; align-items: center; gap: 5px; }
+.compare-outcomes td { font-variant-numeric: tabular-nums; }
+.compare-outcomes td small { display: inline-block; margin-inline-start: 5px; color: #d0b7c6; }
+.compare-scenarios select { max-width: 100%; margin-top: 8px; }
+
+.demo-thoughts { margin: 12px 0; font-size: 12px; }
+.demo-thoughts summary, .scenario-debate summary { cursor: pointer; color: #e5c6ba; }
+.demo-thoughts > div { display: grid; justify-items: start; gap: 5px; margin-top: 8px; }
+.demo-thoughts button { text-align: left; }
+.scenario-debate { margin-block: 12px; }
+.scenario-debate h3 { color: #f7e9de; font: 400 21px Georgia, serif; }
+.scenario-debate-voices { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 8px; }
+.scenario-debate-voices article { display: flex; gap: 8px; padding: 9px; border: 1px solid #dbab9733; border-radius: 10px; background: #271d2e; }
+.scenario-debate-voices article[data-speaking="true"] { border-color: #e8b88090; }
+.scenario-debate-voices p { margin: 3px 0; color: #eed9e1; font-size: 12px; line-height: 1.4; }
+
+.compare-scenario-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: .5rem;
+}
+.compare-scenario-search label { display: grid; gap: .3rem; }
+.compare-view:has(.scenario-playback) > .parallel-policy-picker { display: none; }

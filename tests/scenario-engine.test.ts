@@ -7,8 +7,7 @@ function inputFor(id: string): DecisionInput {
     estimates: Object.fromEntries(scenario.options.map((o) => [o.id, { minutes: 120, source: "user", includesTravelAndSetup: true }])) };
 }
 
-it("runs all fifteen scenarios with four recorded ballots", () => {
- expect(listScenarios()).toHaveLength(15);
+it("runs every scenario with four recorded ballots", () => {
  for (const s of listScenarios()) {
   const r = evaluateDecision(inputFor(s.id));
   expect(Object.values(r.counts).reduce((a,b)=>a+b,0)+r.abstentions).toBe(4);
