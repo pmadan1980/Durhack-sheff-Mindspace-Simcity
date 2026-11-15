@@ -1,4 +1,4 @@
-# MINDSPACE
+# MINDSPACE - the universe within
 
 ### A small world for the decisions that feel big.
 
