@@ -31,8 +31,22 @@ export const districtInfo = {
     purpose: "Replenish what is shared.",
   },
 };
+export const taskTypes = ["presentation", "assignment", "report", "project", "exam preparation", "revision", "task"] as const;
+export type TaskType = typeof taskTypes[number];
+export function inferTaskType(text: string): TaskType {
+  const match = text.match(/\b(presentation|assignment|essay|report|project|exam|revision)\b/i)?.[1].toLowerCase();
+  return match === "essay" ? "assignment" : match === "exam" ? "exam preparation" : (match as TaskType | undefined) ?? "task";
+}
+/** Use the confirmed task identity everywhere, preserving sentence/title casing. */
+export function taskText(c: { taskType: TaskType }, text: string): string {
+  return text.replace(/\bpresentation\b/gi, (word) =>
+    word === word.toUpperCase() ? c.taskType.toUpperCase() :
+    word[0] === word[0].toUpperCase() ? c.taskType[0].toUpperCase() + c.taskType.slice(1) : c.taskType);
+}
+
 export const config = {
-  modelVersion: "mindspace-v1",
+  taskType: "presentation" as TaskType,
+  modelVersion: "mindspace-v2-residents",
   dailyBudget: 6,
   energyCap: 12,
   taskGoal: 12,
@@ -62,6 +76,7 @@ export const config = {
 };
 export type Config = typeof config;
 export interface Setup {
+  taskType: TaskType;
   scenarioId: string;
   energy: number;
   taskProgress: number;
@@ -75,20 +90,21 @@ export const maxDeadlineDay = 5;
 export const scenarios = [
   {
     id: "presentation-and-friend",
-    label: "The presentation & the visit",
+    label: "A task & a visit",
     taskProgress: 0,
     summary:
-      "Your presentation is in three days. A friend is in town for just one. How will your world make room for both?",
+      "Your task is due in three days. A friend is in town for just one. How will your world make room for both?",
   },
   {
     id: "almost-prepared",
     label: "A little head start",
     taskProgress: 10,
     summary:
-      "The same three-day deadline. The same one-day visit. But this time, most of your presentation is already done.",
+      "The same deadline and visit, with most of your task already done.",
   },
 ];
 export const judgeSetup: Setup = {
+  taskType: "presentation",
   scenarioId: scenarios[0].id,
   energy: 8,
   taskProgress: 0,
@@ -98,16 +114,19 @@ export const judgeSetup: Setup = {
 };
 // Literal, disclosed keyword rules for the authored dilemma; not semantic AI interpretation.
 export function thoughtSignals(text: string) {
+  const noVisit = /\b(?:no|without)\s+(?:(?:a|any|my)\s+)?(?:friends?|visits?|visitors?|guests?)\b|\bnot\s+visiting\b|\bvisit\s+(?:is\s+)?cancelled\b/i.test(text);
   return {
     prepared: /\b(almost done|nearly done|head start|already prepared)\b/i.test(text),
     tired: /\b(tired|exhausted|burnt out|burned out)\b/i.test(text),
-    visit: /\b(friend|friends|visit|visiting|visitor|guest)\b/i.test(text),
+    visit: !noVisit && /\b(friend|friends|visit|visiting|visitor|guest)\b/i.test(text),
   };
 }
 export function setupForThought(text: string, setup: Setup): Setup {
-  const { prepared, tired } = thoughtSignals(text);
+  const { prepared, tired, visit } = thoughtSignals(text);
   return {
     ...setup,
+    taskType: inferTaskType(text),
+    visitLastDay: visit ? Math.max(1, Math.min(setup.visitLastDay || 1, setup.taskDeadlineDay)) : 0,
     scenarioId: scenarios[prepared ? 1 : 0].id,
     taskProgress: prepared ? 10 : 0,
     energy: tired ? Math.min(4, setup.energyCap) : setup.energy,
@@ -123,7 +142,7 @@ export const policies: Policy[] = [
   {
     id: "prepare",
     name: "Prepare now",
-    description: "Give the presentation a head start.",
+    description: "Give your task a head start.",
     allocation: { A: 4, C: 0, D: 0, R: 2 },
   },
   {
@@ -160,26 +179,37 @@ export interface Activity {
 }
 export interface Resident {
   id: string;
+  name: string;
+  background: string;
   district: District;
   weights: Allocation;
 }
-// Archetypes are mixed across district identities; membership never determines a vote.
-const archetypes: Allocation[] = [
-  { A: 0.65, C: 0.12, D: 0.08, R: 0.15 },
-  { A: 0.15, C: 0.65, D: 0.05, R: 0.15 },
-  { A: 0.2, C: 0.1, D: 0.6, R: 0.1 },
-  { A: 0.18, C: 0.17, D: 0.1, R: 0.55 },
-  { A: 0.35, C: 0.35, D: 0.1, R: 0.2 },
-  { A: 0.4, C: 0.15, D: 0.3, R: 0.15 },
-];
+const residentNames=["Ari","Mina","Theo","Zara","Kai","Nia","Leo","Isha","Noor","Finn","Remy","Luca","Ada","Ravi","Esme","Jules","Sami","Mei","Otis","Lina","Eden","Rory","Yara","Alex"];
+const residentMotives:Record<District,string[]>={
+  A:["Likes to finish one thing before starting another.","Feels better with a clear plan for the deadline.","Protects focused time when something matters.","Would rather make steady progress than rush later.","Likes turning a difficult task into small wins.","Wants commitments to have a clear finish line."],
+  C:["Makes room for time that cannot be rescheduled.","Values showing up when someone is counting on them.","Protects opportunities to spend time together.","Tries to keep relationships from becoming an afterthought.","Cares about making shared plans work.","Values a conversation that might otherwise be missed."],
+  D:["Enjoys finding a less repetitive way to work.","Likes testing a new approach before settling on one.","Will invest time now if it makes later work easier.","Looks for a useful idea in an unfamiliar method.","Prefers learning something reusable over repeating a struggle.","Wants space to experiment with how things get done."],
+  R:["Protects a little energy for what comes next.","Prefers a pace that can be sustained.","Cares about having enough room to recover.","Avoids plans that leave no breathing room.","Values a break before the reserve runs empty.","Tries to balance effort with the chance to recharge."],
+};
+/** Seeded individual preferences, independent of names and district membership. */
 export function residents(c: Config): Resident[] {
-  return Array.from({ length: c.residentCount }, (_, i) => ({
-    id: `resident-${i + 1}`,
-    district: districts[Math.floor(i / 6) % 4],
-    weights: { ...archetypes[(i + c.seed) % archetypes.length] },
-  }));
+  let seed=(c.seed ^ 0x6d2b79f5)>>>0;
+  const random=()=>{seed=(seed+0x6d2b79f5)>>>0;let value=seed;value=Math.imul(value^(value>>>15),value|1);value^=value+Math.imul(value^(value>>>7),value|61);return ((value^(value>>>14))>>>0)/4294967296;};
+  return Array.from({length:c.residentCount},(_,i)=>{
+    const leaning=districts[i%4];
+    const focus=.36+random()*.53;
+    const others=districts.filter(d=>d!==leaning);
+    const secondary=others[Math.floor(random()*others.length)];
+    const raw=Object.fromEntries(others.map(d=>[d,.08+random()+(d===secondary ? .8 : 0)])) as Allocation;
+    const total=others.reduce((sum,d)=>sum+raw[d],0);
+    const weights=Object.fromEntries(districts.map(d=>[d,d===leaning?focus:(1-focus)*raw[d]/total])) as Allocation;
+    const ranked=[...districts].sort((a,b)=>weights[b]-weights[a]);
+    const name=residentNames[i%residentNames.length]+(i>=residentNames.length?` ${Math.floor(i/residentNames.length)+1}`:"");
+    return {id:`resident-${i+1}`,name,background:residentMotives[ranked[0]][Math.floor(i/4)%6]+` Also values ${districtInfo[ranked[1]].name.toLowerCase()}.`,district:districts[Math.floor(i/6)%4],weights};
+  });
 }
 export function validateSetup(s: Setup): string | null {
+  if (!taskTypes.includes(s.taskType)) return "Choose a supported task type.";
   if (!scenarios.some((x) => x.id === s.scenarioId))
     return "Choose an authored scenario.";
   if (!Number.isFinite(s.energyCap) || s.energyCap <= 0 || s.energyCap > 30)
@@ -189,9 +219,9 @@ export function validateSetup(s: Setup): string | null {
   if (
     !Number.isFinite(s.taskProgress) ||
     s.taskProgress < 0 ||
-    s.taskProgress > 30
+    s.taskProgress > config.taskGoal
   )
-    return "Starting progress must be between 0 and 30.";
+    return `Starting progress must be between 0 and ${config.taskGoal}.`;
   if (
     !Number.isInteger(s.taskDeadlineDay) ||
     s.taskDeadlineDay < 1 ||
@@ -220,6 +250,7 @@ export function createWorld(setup: Setup): { state: State; rules: Config } {
   return {
     rules: {
       ...config,
+      taskType: setup.taskType,
       energyCap: setup.energyCap,
       taskDeadlineDay: setup.taskDeadlineDay,
       connectionLastOpenDay: setup.visitLastDay,
@@ -232,7 +263,7 @@ export function createWorld(setup: Setup): { state: State; rules: Config } {
       taskProgress: setup.taskProgress,
       connectionProgress: 0,
       method: 1,
-      taskResult: null,
+      taskResult: setup.taskProgress >= config.taskGoal ? true : null,
       connectionResult: null,
     },
   };
@@ -266,7 +297,7 @@ export function externalEvent(day: number, c: Config = config) {
     name: day === 1 ? (visit ? "A friend arrives" : "Day one") : "An open day",
     detail:
       day === 1
-        ? `${visit}The presentation is due at the end of day ${c.taskDeadlineDay}.`
+        ? taskText(c, `${visit}The presentation is due at the end of day ${c.taskDeadlineDay}.`)
         : "No external resource changes today.",
     energy: 0,
   };
@@ -297,6 +328,12 @@ export function proposalsForDay(
         : { ...p.allocation },
   }));
 }
+/** Terminal worlds stay inspectable, but cannot start another simulated day. */
+export function isWorldComplete(s: State, c: Config): boolean {
+  return s.taskResult !== null || s.taskProgress >= c.taskGoal ||
+    s.day > Math.min(c.taskDeadlineDay, c.maxDays);
+}
+
 export function forecast(s: State, p: Policy, c: Config): Activity {
   const a = p.allocation;
   const energyFactor =
@@ -308,9 +345,14 @@ export function forecast(s: State, p: Policy, c: Config): Activity {
   const delta = c.recoveryRate * a.R - cost;
   return {
     energyFactor,
-    taskGain: c.achievementRate * a.A * energyFactor * s.method,
+    taskGain: Math.min(
+      Math.max(0, c.taskGoal - s.taskProgress),
+      c.achievementRate * a.A * energyFactor * s.method,
+    ),
     connectionGain:
-      s.day <= c.connectionLastOpenDay ? c.connectionRate * a.C : 0,
+      s.day <= c.connectionLastOpenDay
+        ? Math.min(Math.max(0, c.connectionGoal - s.connectionProgress), c.connectionRate * a.C)
+        : 0,
     energyDelta: clamp(s.energy + delta, 0, c.energyCap) - s.energy,
     // Audible/visual replenishment is the contribution that survives the cap.
     restored:
@@ -406,6 +448,8 @@ export function resolve(
 ): Round {
   if (state.day > c.maxDays)
     throw new Error("This world has reached its last day.");
+  if (isWorldComplete(state, c))
+    throw new Error("This scenario is complete; start a new thought to play again.");
   const start = actionState(state, c);
   const election = elect(start, ps, c);
   const policy = intervention
@@ -418,14 +462,14 @@ export function resolve(
     ...start,
     day: start.day + 1,
     energy: start.energy + activity.energyDelta,
-    taskProgress: start.taskProgress + activity.taskGain,
-    connectionProgress: start.connectionProgress + activity.connectionGain,
+    taskProgress: Math.min(c.taskGoal, start.taskProgress + activity.taskGain),
+    connectionProgress: Math.min(c.connectionGoal, start.connectionProgress + activity.connectionGain),
     method: start.method + activity.methodGain,
     taskResult:
       start.taskResult ??
-      (start.day === c.taskDeadlineDay
-        ? start.taskProgress + activity.taskGain >= c.taskGoal
-        : null),
+      (start.taskProgress + activity.taskGain >= c.taskGoal
+        ? true
+        : start.day >= c.taskDeadlineDay ? false : null),
     connectionResult:
       start.connectionResult ??
       (start.day === c.connectionLastOpenDay
@@ -447,7 +491,7 @@ export function resolve(
     events: [
       {
         id: `${id}-task`,
-        label: "Presentation advanced",
+        label: taskText(c, "Presentation advanced"),
         amount: activity.taskGain,
         unit: "points",
         district: "A",
@@ -503,9 +547,12 @@ export function replay(
   if (!a.length || a[0].before.day !== day)
     throw new Error("Choose a completed day to change.");
   const b = [branch(a[0], policyId, c)];
-  for (const r of a.slice(1))
+  for (const r of a.slice(1)) {
+    if (isWorldComplete(b.at(-1)!.after, c)) break;
     b.push(resolve(structuredClone(b.at(-1)!.after), r.policies, c));
-  return { a: structuredClone(a), b };
+  }
+  // Compare only the shared active horizon; never run a completed branch again.
+  return { a: structuredClone(a.slice(0, b.length)), b };
 }
 export const fmt = (n: number, places = 1) =>
   Number(n.toFixed(places)).toLocaleString("en-GB", {

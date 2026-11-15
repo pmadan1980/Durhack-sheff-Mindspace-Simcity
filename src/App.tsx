@@ -1,24 +1,23 @@
+import { BrainTransition } from "./BrainCinema";
+import ParallelWorlds from "./ParallelWorlds";
+import { taskText } from "./simulation";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   ArrowRight,
-  ArrowUpRight,
-  AudioLines,
   Check,
   GitBranch,
   Headphones,
-  Orbit,
   Pause,
   Play,
   Radio,
   RotateCcw,
   Settings2,
   SkipForward,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import {
   actionState,
+  isWorldComplete,
   branch,
   createWorld,
   districtInfo,
@@ -53,8 +52,6 @@ import {
 } from "./journey";
 import MindUniverse, { type Location } from "./MindUniverse";
 
-const note =
-  "An interactive fictional model. Change its assumptions and explore what follows.";
 export default function App() {
   const [setup, setSetup] = useState<Setup>({ ...judgeSetup });
   const [journey, dispatch] = useReducer(
@@ -63,6 +60,7 @@ export default function App() {
     initialJourney,
   );
   const [thought, setThought] = useState("");
+  const [thoughtArriving,setThoughtArriving]=useState(false);
   const [speaker, setSpeaker] = useState<District | null>(null);
   const [focus, setFocus] = useState<District | null>(null);
   const [listening, setListening] = useState(false);
@@ -100,9 +98,6 @@ export default function App() {
   const staged = guided && !journey.exploring;
   const last = history.at(-1);
   const selected = history.find((r) => r.before.day === selectedDay) ?? last;
-  const prior = history.find(
-    (r) => r.before.day === (selected?.before.day ?? 1) - 1,
-  );
   const election = useMemo(
     () => elect(actionState(state, c), proposals, c),
     [state, proposals, c],
@@ -113,7 +108,7 @@ export default function App() {
       : elapsed < c.campaignSeconds + c.voteSeconds
         ? "Voting"
         : "Resolution";
-  const ended = state.day > c.maxDays;
+  const ended = isWorldComplete(state, c);
   // Free play: forecast before voting, only the counted prefix while voting, totals after.
   const counted =
     phase === "Campaign"
@@ -146,7 +141,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, [scene, journey.counting, lockedDay, c]);
   useEffect(() => {
-    if (entered && !journey.exploring && scene !== "free")
+    if (entered && !journey.exploring && scene !== "free" && scene !== "thought")
       setRoom(sceneRoom[scene]);
     setListening(false);
     if (scene !== "result") setReactions([]);
@@ -175,15 +170,18 @@ export default function App() {
     const priorA = history.find(
       (r) => r.before.day === (pair?.a.before.day ?? 1) - 1,
     );
+    const priorB = horizon?.b.find(
+      (r) => r.before.day === (pair?.b.before.day ?? 1) - 1,
+    ) ?? priorA;
     audio.setFrame(
       tab === "Compare" && pair
         ? {
             a: projectScore(pair.a.after, pair.a, priorA, c),
-            b: projectScore(pair.b.after, pair.b, priorA, c),
+            b: projectScore(pair.b.after, pair.b, priorB, c),
           }
         : { a: projectScore(state, last, history.at(-2), c) },
     );
-  }, [state, last, history, c, tab, pair]);
+  }, [state, last, history, c, tab, pair, horizon]);
   useEffect(() => {
     audio.setMix(tab === "Compare" && pair ? mix : 0, solo, volume, muted);
   }, [tab, pair, mix, solo, volume, muted]);
@@ -196,9 +194,9 @@ export default function App() {
           ? comparePlaying
           : free
             ? playing
-            : listening || room === "symphony"),
+            : listening || (scene === "debate" && staged)),
     );
-  }, [entered, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, room]);
+  }, [entered, soundOn, hiddenPause, playing, tab, pair, comparePlaying, free, listening, scene, staged]);
   async function enableSound() {
     try {
       const enabled = await audio.enable();
@@ -217,6 +215,7 @@ export default function App() {
     }
   }
   function restart() {
+    setThoughtArriving(false);
     setHorizon(null);
     audio.reset();
     dispatch({ type: "reset", setup });
@@ -273,7 +272,7 @@ export default function App() {
     setUnfold(0);
     setPair({ a: r.a[0], b: r.b[0] });
     setMix(0.5);
-    setComparePlaying(false);
+    setComparePlaying(true);
     setRoom("parallel");
   }
   function compare(round = selected) {
@@ -281,7 +280,8 @@ export default function App() {
     setHorizon(null);
     dispatch({ type: "pause" });
     audio.reset();
-    const alternative = round.policies.find((p) => p.id !== round.policy.id)!;
+    const alternative = round.policies.find((p) => p.id !== round.policy.id);
+    if (!alternative) return;
     setPair({ a: structuredClone(round), b: branch(round, alternative.id, c) });
     setMix(0.5);
     setComparePlaying(true);
@@ -329,7 +329,7 @@ export default function App() {
         setEntered(true);
         setHiddenPause(false);
         dispatch({ type: "reset", setup });
-        setRoom("headquarters");
+        setRoom("hub");
       }}
       guided={guided}
       free={free}
@@ -338,7 +338,9 @@ export default function App() {
       inProgress={scene !== "thought"}
       onRelease={(next, text) => {
         audio.reset();
+        if (!soundOn && !muted) void enableSound();
         setThought(text);
+        setThoughtArriving(true);
         setPair(null);
         setSelectedDay(null);
         setSolo(null);
@@ -357,7 +359,7 @@ export default function App() {
       }}
       stage={
         staged ? (
-          <JourneyStage
+          thoughtArriving ? <BrainTransition key={thought} thought={thought} onDone={()=>setThoughtArriving(false)} /> : <JourneyStage
             journey={journey}
             dispatch={dispatch}
             thought={thought}
@@ -365,7 +367,7 @@ export default function App() {
             solo={solo}
             onSound={() => {
               setMuted(false);
-              void enableSound().then(() => setListening(true));
+              void enableSound().then(() => setListening(scene !== "debate"));
             }}
             listening={listening}
             onListen={setListening}
@@ -420,6 +422,10 @@ export default function App() {
       onInspect={(day) => {
         setSelectedDay(day);
         navigate("Observatory");
+      }}
+      onReplayMemory={(day) => {
+        const round = roundFor(history, day);
+        if (round) { setSelectedDay(day); compare(round); }
       }}
       onHelp={() => setHelp(true)}
       playing={tab === "Compare" ? comparePlaying : playing}
@@ -493,12 +499,11 @@ export default function App() {
                         ? "Replay your days below, or explore an alternative."
                         : "24 residents vote for the future they value. The winning budget becomes today’s policy."}
                     </p>
-                    <p className="election-note">
-                      Presentation due day {c.taskDeadlineDay} ·{" "}
+                    <p className="election-note">{taskText(c, " Presentation due day ")}{c.taskDeadlineDay} ·{" "}
                       {c.connectionLastOpenDay ? `visit closes day ${c.connectionLastOpenDay}.` : "no visit."}
                       <br />
                       {ended
-                        ? "Fourteen days complete."
+                        ? state.taskResult ? taskText(c, "Presentation complete. This scenario has ended.") : "The deadline has passed. This scenario has ended."
                         : externalEvent(state.day, c).detail}
                     </p>
                     <button
@@ -621,7 +626,7 @@ export default function App() {
                   <Resource
                     symbol="A"
                     color={districtInfo.A.color}
-                    name="Presentation"
+                    name={taskText(c, "Presentation")}
                     value={state.taskProgress}
                     max={c.taskGoal}
                     detail={milestone(
@@ -667,412 +672,34 @@ export default function App() {
 
             {tab === "Compare" && pair && (
               <section className="compare-view">
-                <div className="section-heading">
-                  <div>
-                    <span className="eyebrow">
-                      {horizon
-                        ? `PARALLEL WORLDS / DAYS ${horizon.day}–${pair.a.before.day} REPLAYED`
-                        : "PARALLEL WORLDS / ONE ROUND, RECOMPOSED"}
-                    </span>
-                    <h1>What if you chose differently?</h1>
-                    <p>
-                      Same starting point. Same external event. One different
-                      allocation.
-                    </p>
-                  </div>
-                  <span className="stamp">
-                    FROZEN AT END OF DAY {pair.a.before.day}
-                  </span>
-                </div>
-                <div className="comparison-worlds">
-                  {(
-                    [
-                      ["A", pair.a],
-                      ["B", pair.b],
-                    ] as const
-                  ).map(([label, r]) => (
-                    <article
-                      className={`comparison-card world-${label.toLowerCase()}`}
-                      key={label}
-                    >
-                      <div className="comparison-title">
-                        <span className="world-letter">{label}</span>
-                        <div>
-                          <span className="eyebrow">
-                            {label === "A"
-                              ? horizon
-                                ? `DAY ${horizon.day} · ELECTED`
-                                : "THE ELECTED PATH"
-                              : horizon
-                                ? `DAY ${horizon.day} · INTERVENTION`
-                                : "MANUAL INTERVENTION"}
-                          </span>
-                          <h2>
-                            {horizon
-                              ? horizon[label === "A" ? "a" : "b"][0].policy.name
-                              : r.policy.name}
-                          </h2>
-                        </div>
-                        {label === "A" ? (
-                          <span className="tag">
-                            {(horizon ? horizon.a[0] : r).election.counts[
-                              (horizon ? horizon.a[0] : r).election.winner
-                            ]}{" "}
-                            VOTES
-                          </span>
-                        ) : (
-                          <GitBranch size={19} />
-                        )}
-                      </div>
-                      <div className="comparison-stats">
-                        <span>
-                          <small>Presentation</small>
-                          <b>{fmt(r.after.taskProgress)}</b>
-                        </span>
-                        <span>
-                          <small>Visit</small>
-                          <b>{fmt(r.after.connectionProgress)}</b>
-                        </span>
-                        <span>
-                          <small>Energy</small>
-                          <b>{fmt(r.after.energy)}</b>
-                        </span>
-                        <span>
-                          <small>Method</small>
-                          <b>{fmt(r.after.method, 2)}×</b>
-                        </span>
-                      </div>
-                      {label === "B" && (
-                        <label className="branch-choice">
-                          Replace this round’s policy
-                          <select
-                            aria-label="Alternative policy"
-                            value={pair.b.policy.id}
-                            onChange={(e) => {
-                              if (horizon) {
-                                branchHorizon(horizon.day, e.target.value);
-                                return;
-                              }
-                              audio.reset();
-                              setPair({
-                                ...pair,
-                                b: branch(pair.a, e.target.value, c),
-                              });
-                            }}
-                          >
-                            {(horizon ? horizon.a[0] : pair.a).policies.map((p) => (
-                              <option value={p.id} key={p.id}>
-                                {p.name}
-                                {p.id === (horizon ? horizon.a[0] : pair.a).policy.id
-                                  ? " (same policy)"
-                                  : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                      {label === "A" && (
-                        <p className="comparison-explanation">
-                          The original election is preserved in both records. B
-                          is an intervention, not a new democratic mandate.
-                        </p>
-                      )}
-                    </article>
-                  ))}
-                </div>
-                <div className="mixer panel">
-                  <div>
-                    <span className="eyebrow">
-                      <Headphones size={14} /> THE PARALLEL WORLDS MIXER
-                    </span>
-                    <h2>Listen between the possibilities.</h2>
-                    <p>This blends sound, never the numerical worlds.</p>
-                  </div>
-                  <div className="mixer-slider">
-                    <div>
-                      <button
-                        onClick={() => setMix(0)}
-                        className={mix === 0 ? "endpoint active" : "endpoint"}
-                      >
-                        A only
-                      </button>
-                      <span>
-                        {Math.round((1 - mix) * 100)}% A <i>/</i>{" "}
-                        {Math.round(mix * 100)}% B
-                      </span>
-                      <button
-                        onClick={() => setMix(1)}
-                        className={mix === 1 ? "endpoint active" : "endpoint"}
-                      >
-                        B only
-                      </button>
-                    </div>
-                    <input
-                      aria-label="A B audio balance"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step=".01"
-                      value={mix}
-                      onChange={(e) => setMix(+e.target.value)}
-                    />
-                    <small>
-                      Equal-power crossfade · shared {audioConfig.bpm} BPM clock
-                    </small>
-                  </div>
-                  <button
-                    className="secondary"
-                    onClick={() => setComparePlaying(!comparePlaying)}
-                  >
-                    {comparePlaying ? <Pause size={15} /> : <Play size={15} />}
-                    {comparePlaying ? "Pause loops" : "Play loops"}
-                  </button>
-                </div>
-                <div className="delta-row">
-                  {(
-                    [
-                      "taskProgress",
-                      "connectionProgress",
-                      "energy",
-                      "method",
-                    ] as const
-                  ).map((key, i) => {
-                    const d = districts[i === 2 ? 3 : i === 3 ? 2 : i];
-                    const delta = pair.b.after[key] - pair.a.after[key];
-                    return (
-                      <div className="delta-card" key={key}>
-                        <VoiceIcon d={d} size={28} />
-                        <div>
-                          <small>
-                            B − A /{" "}
-                            {["PRESENTATION", "VISIT", "ENERGY", "METHOD"][i]}
-                          </small>
-                          <b>
-                            {delta > 0 ? "+" : ""}
-                            {fmt(delta, 3)}
-                            {key === "method" ? "×" : ""}
-                          </b>
-                        </div>
-                        <button
-                          aria-label={`Compare ${districtInfo[d].name} district`}
-                          title="Compare this district"
-                          onClick={() => {
-                            setSolo(solo === d ? null : d);
-                          }}
-                        >
-                          <Headphones size={17} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="comparison-footnote">
-                  {horizon
-                    ? `Only day ${horizon.day}'s plan was replaced. Days ${horizon.day + 1}–${pair.a.before.day} were replayed in world B with residents voting on the same proposals. Both worlds cover days ${horizon.day}–${pair.a.before.day} (${horizon.a.length} day${horizon.a.length === 1 ? "" : "s"}) and receive the same morning events.`
-                    : `${
-                        pair.a.policy.id === pair.b.policy.id
-                          ? "Identical-policy comparison: both sets of numbers match."
-                          : `Only the day ${pair.a.before.day} action differs.`
-                      } Both receive “${pair.a.external.name}”. No later days are simulated.`}{" "}
-                  <button
-                    className="text-button"
-                    onClick={() => navigate("World")}
-                  >
-                    Return to live World A <ArrowRight size={13} />
-                  </button>
-                </p>
+                <div className="section-heading"><div><span className="eyebrow">PARALLEL WORLDS</span><h1>One decision. Two living futures.</h1><p>The same starting point. A different choice.</p></div></div>
+                <ParallelWorlds a={pair.a} b={pair.b} rules={c} mix={mix} onMix={setMix} playing={comparePlaying} onPlaying={setComparePlaying} soundOn={soundOn && !muted} onSound={() => { setMuted(false); void enableSound(); }} solo={solo} onSolo={setSolo} />
+                <label className="parallel-policy-picker">Try another plan
+                  <select aria-label="Alternative plan" value={horizon ? horizon.b[0].policy.id : pair.b.policy.id} onChange={(e) => {
+                    audio.reset();
+                    if (horizon) branchHorizon(horizon.day, e.target.value);
+                    else setPair({ ...pair, b: branch(pair.a, e.target.value, c) });
+                  }}>
+                    {(horizon ? horizon.a[0] : pair.a).policies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </label>
+                <button className="text-button" onClick={() => navigate("World")}>Return to your world <ArrowRight size={13} /></button>
               </section>
             )}
 
             {tab === "Observatory" && (
               <Observatory
                 round={selected}
-                prior={prior}
                 state={state}
                 rules={c}
                 history={history}
                 election={election}
                 policies={proposals}
+                onSelectDay={setSelectedDay}
+                onBranch={() => compare()}
               />
             )}
-
-            {room === "symphony" && (
-              <>
-                <section
-                  className={`sound-desk ${soundOn && (playing || (tab === "Compare" && comparePlaying)) ? "is-sounding" : ""}`}
-                  aria-label="Sound controls"
-                >
-                  <div className="sound-title">
-                    <AudioLines size={23} />
-                    <div>
-                      <span className="eyebrow">THE WORLD’S COMPOSITION</span>
-                      <small>
-                        {soundOn
-                          ? `${audioConfig.bpm} BPM · C pentatonic`
-                          : "Best explored with headphones"}
-                      </small>
-                    </div>
-                  </div>
-                  <div className="part-controls">
-                    {districts.map((d) => (
-                      <button
-                        key={d}
-                        aria-pressed={solo === d}
-                        className={solo === d ? "solo-active" : ""}
-                        onClick={() => {
-                          setSolo(solo === d ? null : d);
-                        }}
-                        style={
-                          {
-                            "--district": districtInfo[d].color,
-                          } as React.CSSProperties
-                        }
-                      >
-                        <span className="part-icon">
-                          <VoiceIcon d={d} size={30} />
-                        </span>
-                        <span>
-                          {districtInfo[d].name}
-                          <small>
-                            {solo === d
-                              ? "SOLO · CLICK TO RELEASE"
-                              : districtInfo[d].voice}
-                          </small>
-                        </span>
-                        <span className="mini-wave">
-                          {[1, 2, 3, 4, 5].map((n) => (
-                            <i
-                              key={n}
-                              style={{
-                                height: `${[8, 17, 24, 12, 19][n - 1]}px`,
-                                animationDelay: `${n * -0.13}s`,
-                              }}
-                            />
-                          ))}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="master-controls">
-                    <button
-                      className="icon-button"
-                      aria-label={muted ? "Unmute master" : "Mute master"}
-                      onClick={() => setMuted(!muted)}
-                    >
-                      {muted ? <VolumeX size={17} /> : <Volume2 size={17} />}
-                    </button>
-                    <input
-                      aria-label="Master volume"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step=".01"
-                      value={volume}
-                      onChange={(e) => setVolume(+e.target.value)}
-                    />
-                    <button
-                      className="sound-enable"
-                      onClick={() => void enableSound()}
-                    >
-                      {soundOn ? <Check size={13} /> : <Headphones size={13} />}
-                      {soundOn ? "Sound on" : "Enable sound"}
-                    </button>
-                  </div>
-                </section>
-                <p className="sound-status" role="status">
-                  {soundStatus}
-                  {solo
-                    ? ` · ${districtInfo[solo].name} isolated in both worlds`
-                    : ""}
-                </p>
-              </>
-            )}
-
-            {(room === "memory" || room === "observatory") && (
-              <section className="timeline panel">
-                <div className="timeline-heading">
-                  <div>
-                    <span className="eyebrow">YOUR WORLD’S MEMORY</span>
-                    <h2>Every day leaves a trace.</h2>
-                  </div>
-                  <button
-                    className="secondary small"
-                    disabled={!selected}
-                    title={
-                      !selected
-                        ? "Resolve one day to create a branch"
-                        : `Branch day ${selected.before.day}`
-                    }
-                    onClick={() => compare()}
-                  >
-                    <GitBranch size={14} /> Explore another choice{" "}
-                    <ArrowUpRight size={14} />
-                  </button>
-                </div>
-                <div className="timeline-track">
-                  <div className="genesis">
-                    <span>
-                      <Orbit size={20} />
-                    </span>
-                    <b>Genesis</b>
-                    <small>The starting point</small>
-                  </div>
-                  {history.length ? (
-                    history.map((r) => (
-                      <button
-                        key={r.id}
-                        className={`day-portrait ${selected?.id === r.id ? "portrait-selected" : ""}`}
-                        onClick={() => setSelectedDay(r.before.day)}
-                      >
-                        <span className="portrait-art">
-                          {districts.map((d) => (
-                            <i
-                              key={d}
-                              style={{
-                                height: `${8 + r.policy.allocation[d] * 8}px`,
-                                background: districtInfo[d].color,
-                              }}
-                            />
-                          ))}
-                        </span>
-                        <span>
-                          <b>Day {String(r.before.day).padStart(2, "0")}</b>
-                          <small>{r.policy.name}</small>
-                        </span>
-                        <Check size={12} />
-                      </button>
-                    ))
-                  ) : (
-                    <div className="timeline-empty">
-                      <span className="dotted-line" />
-                      Your first election will begin a history. Play or step a
-                      day.
-                      <span className="dotted-line" />
-                    </div>
-                  )}
-                </div>
-                {selected && (
-                  <div className="latest-resolution">
-                    <Check size={13} />
-                    <span>
-                      Day {selected.before.day}: <b>{selected.policy.name}</b>{" "}
-                      elected · +{fmt(selected.activity.taskGain)} presentation
-                      · +{fmt(selected.activity.connectionGain)} visit ·{" "}
-                      {selected.activity.energyDelta >= 0 ? "+" : ""}
-                      {fmt(selected.activity.energyDelta)} net energy.
-                    </span>
-                    <button
-                      className="text-button"
-                      onClick={() => navigate("Observatory")}
-                    >
-                      Inspect calculations <ArrowRight size={12} />
-                    </button>
-                  </div>
-                )}
-              </section>
-            )}
             <footer className="footer">
-              <span>{note}</span>
               <span>
                 COMPOSED AT DURHACK <span className="footer-star">✳</span> 2026
               </span>
@@ -1118,38 +745,26 @@ export default function App() {
               <span className="eyebrow">WELCOME TO MINDSPACE</span>
               <h2 id="help-title">A decision isn’t a single note.</h2>
               <p>
-                It’s a composition of things that matter. Explore this fictional
-                one through four connected districts.
+                Explore what matters through four connected districts.
               </p>
               <ol>
                 <li>
-                  <b>Release a thought.</b> Headquarters maps a few disclosed
-                  keywords to the authored presentation-and-visit dilemma,
-                  locally, not with AI. You can edit the assumptions.
-                </li>
+                  <b>Release a thought.</b> Tell us what’s on your mind, then confirm the details.</li>
                 <li>
                   <b>Meet the voices and hear the debate.</b> Achievement,
-                  Connection, Discovery and Recovery argue from the model’s
-                  forecasts. They don’t vote.
+                  Connection, Discovery and Recovery each make their case.
                 </li>
                 <li>
                   <b>Shape the plans.</b> Keep or edit a six-block plan. Then
                   24 residents vote and you watch the real ballots counted.
                 </li>
                 <li>
-                  <b>See what changed.</b> The winning plan is resolved once; a
-                  ledger, the world and its music show the consequences.
+                  <b>See what changed.</b> Watch the world and its music respond.
                 </li>
                 <li>
-                  <b>Three days, then a what-if.</b> Replay from any day with a
-                  different plan, or explore freely. Explore manually pauses
-                  the journey at any time.
+                  <b>Try another future.</b> Change a completed day’s plan and compare the worlds.
                 </li>
               </ol>
-              <p className="fiction-note">
-                A creative model, not a diagnosis, advice or prediction. No
-                network service or key is needed. Refresh starts a fresh world.
-              </p>
               <button className="primary" onClick={() => setHelp(false)}>
                 Let’s explore <ArrowRight size={15} />
               </button>
@@ -1219,21 +834,17 @@ function Resource({
 }
 function Budget({ policy }: { policy: Policy }) {
   return (
-    <div
-      className="budget-strip"
-      aria-label={districts
-        .map((d) => `${districtInfo[d].name} ${policy.allocation[d]}`)
-        .join(", ")}
-    >
-      {districts.flatMap((d) =>
-        Array.from({ length: policy.allocation[d] }, (_, i) => (
-          <span
-            key={`${d}-${i}`}
-            style={{ background: districtInfo[d].color }}
-            title={`${districtInfo[d].name}: ${policy.allocation[d]}`}
-          />
-        )),
-      )}
+    <div className="allocation-breakdown">
+      <small>Time blocks</small>
+      <div className="allocation-parts">
+        {districts.filter(d => policy.allocation[d] > 0).map(d => (
+          <span key={d} style={{ "--voice": districtInfo[d].color } as React.CSSProperties}>
+            <VoiceIcon d={d} size={21} />
+            <span>{districtInfo[d].name}</span>
+            <b>×{policy.allocation[d]}</b>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1274,9 +885,7 @@ function Candidate({
       </div>
       <Budget policy={policy} />
       <div className="budget-caption">
-        <span>
-          {districts.map((d) => `${d}${policy.allocation[d]}`).join(" · ")}
-        </span>
+
         <button
           className="text-button"
           disabled={locked}

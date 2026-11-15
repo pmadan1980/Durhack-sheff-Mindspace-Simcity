@@ -1,0 +1,30 @@
+/* Handcrafted scene art: the user's reference plus matching generated pose states. */
+.everyday-scene.clay-scene,
+.playback-stage.is-split .everyday-scene.clay-scene,
+.playback-stage:not(.is-split) .everyday-scene.clay-scene {
+  position:relative; display:block; width:100%; height:auto; max-height:none;
+  aspect-ratio:3 / 2; overflow:hidden; isolation:isolate; background:#110e22; border-radius:13px;
+}
+.clay-layer { position:absolute; inset:0; opacity:0; transition:opacity .85s cubic-bezier(.22,.65,.25,1); pointer-events:none; }
+.clay-layer.clay-visible { opacity:1; }
+.clay-still { display:block; width:100%; height:100%; object-fit:cover; user-select:none; animation:clay-camera-drift 14s ease-in-out infinite; transform-origin:50% 66%; }
+.clay-reference { background-repeat:no-repeat; background-size:200% 100%; }
+.clay-reference-work { background-position:left center; }
+.clay-reference-friend { background-position:right center; }
+.clay-lamplight { position:absolute; left:12%; top:47%; width:23%; height:32%; background:radial-gradient(ellipse,#ffd18717,transparent 68%); mix-blend-mode:screen; animation:clay-light-breathe 5s ease-in-out infinite; pointer-events:none; }
+.clay-steam { position:absolute; left:70%; top:65%; width:10%; height:12%; opacity:.48; fill:none; stroke:#f6d9c2; stroke-width:1.4; stroke-linecap:round; animation:clay-steam-rise 3.6s ease-in-out infinite; pointer-events:none; }
+.clay-steam.steam-rest { left:76%; top:53%; }
+.clay-idea-glow { position:absolute; left:31%; top:37%; width:16%; height:20%; background:radial-gradient(ellipse,#ffd97033,transparent 67%); mix-blend-mode:screen; animation:clay-light-breathe 3s ease-in-out infinite; pointer-events:none; }
+.clay-ready { position:absolute; top:12px; right:12px; font-size:10px; letter-spacing:.6px; padding:5px 9px; color:#f6eddc; background:#526f52e8; border:1px solid #c2d49c60; border-radius:999px; }
+.clay-scene.scene-paused * { animation-play-state:paused !important; }
+.playback-scene { background:#110e22; border:1px solid #f1ccb612; border-radius:14px; }
+.playback-world { background:linear-gradient(160deg,#241a2c,#151225); border-color:#c3a6bd30; padding:12px; box-shadow:0 12px 35px #0002; }
+.playback-world header span { color:#f1e0cd; }
+.playback-stage { max-width:800px; }
+.playback-stage.is-split { gap:18px; }
+.playback-tiles { margin-top:12px; }
+@keyframes clay-camera-drift { 0%,100% { transform:scale(1.005) translateY(0); } 50% { transform:scale(1.015) translateY(-.15%); } }
+@keyframes clay-light-breathe { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+@keyframes clay-steam-rise { 0%,100% { opacity:.15; transform:translateY(3px); } 55% { opacity:.5; transform:translateY(-4px); } }
+@media(prefers-reduced-motion:reduce) { .clay-scene * { animation:none!important; transition:none!important; } }
+.clay-scene[data-reduced="true"] * { animation:none!important; transition:none!important; }

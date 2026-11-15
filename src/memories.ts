@@ -1,3 +1,4 @@
+import { taskText } from "./simulation";
 import { fmt, type Config, type District, type Round } from "./simulation";
 
 export interface Memory {
@@ -31,9 +32,9 @@ export function memoriesFor(rounds: Round[], c: Config): Memory[] {
       add(
         "A",
         milestone === c.taskGoal
-          ? `Presentation ready on day ${r.before.day}`
-          : `Presentation halfway on day ${r.before.day}`,
-        `${fmt(r.after.taskProgress)} / ${c.taskGoal} presentation points. ${r.after.taskResult === false ? "The day-3 deadline was already missed." : `Reached on day ${r.before.day}; deadline: day ${c.taskDeadlineDay}.`}`,
+          ? taskText(c, `Presentation ready on day ${r.before.day}`)
+          : taskText(c, `Presentation halfway on day ${r.before.day}`),
+        taskText(c, `${fmt(r.after.taskProgress)} / ${c.taskGoal} presentation points. ${r.after.taskResult === false ? `The day-${c.taskDeadlineDay} deadline was missed.` : `Reached on day ${r.before.day}; deadline: day ${c.taskDeadlineDay}.`}`),
       );
     if (r.activity.connectionGain > 0)
       add(

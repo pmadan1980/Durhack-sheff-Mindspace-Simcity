@@ -1,8 +1,12 @@
+import { BrainMotionContext } from "./brainMotion";
+import { introLine } from "./dialogue";
+import { taskText } from "./simulation";
 import {
   Component,
   Suspense,
   lazy,
   useEffect,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -23,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  isWorldComplete,
   districtInfo,
   districts,
   fmt,
@@ -38,6 +43,8 @@ import {
   type State,
 } from "./simulation";
 import { memoriesFor } from "./memories";
+import MemoryShelf from "./MemoryShelf";
+import { spiralDistrict } from "./hubSpiral";
 import { voices } from "./dialogue";
 import VoiceIcon from "./VoiceIcon";
 import type { Cue } from "./journey";
@@ -89,12 +96,6 @@ export const locations = {
     symbol: "⌁",
     color: "#70bfff",
   },
-  symphony: {
-    title: "Symphony Chamber",
-    subtitle: "This is what your world sounds like.",
-    symbol: "♫",
-    color: "#a5ecc0",
-  },
   A: {
     title: "Achievement",
     subtitle: "A little higher. A little closer.",
@@ -121,6 +122,11 @@ export const locations = {
   },
 } as const;
 export type Location = keyof typeof locations;
+const chamberRoute = ["headquarters", "memory", "decision", "parallel", "observatory"] as const;
+
+function isTravelControl(target: EventTarget) {
+  return target instanceof Element && !!target.closest("button, a, input, select, textarea, summary, [contenteditable]");
+}
 const Scene = lazy(() => import("./MindScene"));
 
 class SceneBoundary extends Component<
@@ -164,6 +170,7 @@ interface Props {
   free: boolean;
   onApply: (setup: Setup) => void;
   onInspect: (day: number) => void;
+  onReplayMemory: (day: number) => void;
   onHelp: () => void;
   onPlay: () => void;
   onStep: () => void;
@@ -198,6 +205,8 @@ export default function MindUniverse(props: Props) {
   const [settings, setSettings] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [arrived, setArrived] = useState(false);
+  const [spiralProgress, setSpiralProgress] = useState(0);
+  const swipeLast = useRef<{ x: number; y: number } | null>(null);
   const [thought, setThought] = useState("");
   const [thoughtResult, setThoughtResult] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -215,6 +224,10 @@ export default function MindUniverse(props: Props) {
     : null;
   const info = locations[room];
   const flat = lite || unavailable;
+  const canExploreSpiral = entered && room === "hub" && !props.staged && !settings && !mapOpen;
+  const spiralFocus = room === "hub" ? spiralDistrict(spiralProgress) : null;
+  const moveSpiral = (delta: number) =>
+    setSpiralProgress(progress => Math.max(0, Math.min(1, progress + delta)));
   useEffect(() => {
     setArrived(flat || reduced);
     setMapOpen(false);
@@ -260,11 +273,35 @@ export default function MindUniverse(props: Props) {
   return (
     <MotionConfig reducedMotion={reduced ? "always" : "never"}>
       <div
-        className={`mind-universe ${entered ? "inside-mind" : "outside-mind"} ${flat ? "lightweight" : "full-3d"} ${reduced ? "still-mind" : ""} room-${room}`}
+        className={`mind-universe ${entered ? "inside-mind" : "outside-mind"} ${flat ? "lightweight" : "full-3d"} ${reduced ? "still-mind" : ""} room-${room} ${props.staged ? `journey-scene-${props.cue?.scene}` : ""}`}
         style={{ "--location": info.color } as CSSProperties}
       >
         <div
           className="universe-canvas"
+          data-room-travel={canExploreSpiral ? "true" : undefined}
+          onWheel={event => {
+            if (!canExploreSpiral || event.ctrlKey || event.metaKey || isTravelControl(event.target)) return;
+            const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+            const pixels = delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 280 : 1);
+            moveSpiral(Math.max(-240, Math.min(240, pixels)) / 1600);
+          }}
+          onTouchStart={event => {
+            const touch = event.touches[0];
+            swipeLast.current = canExploreSpiral && event.touches.length === 1 && !isTravelControl(event.target)
+              ? { x: touch.clientX, y: touch.clientY }
+              : null;
+          }}
+          onTouchMove={event => {
+            const last = swipeLast.current;
+            if (!canExploreSpiral || !last || event.touches.length !== 1) return;
+            const touch = event.touches[0];
+            const x = last.x - touch.clientX;
+            const y = last.y - touch.clientY;
+            swipeLast.current = { x: touch.clientX, y: touch.clientY };
+            moveSpiral((Math.abs(y) >= Math.abs(x) ? y : x) / 680);
+          }}
+          onTouchCancel={() => { swipeLast.current = null; }}
+          onTouchEnd={() => { swipeLast.current = null; }}
           aria-label={
             flat
               ? "Lightweight illustrated mind world"
@@ -280,7 +317,7 @@ export default function MindUniverse(props: Props) {
                   history={history}
                   round={history.at(-1)}
                   running={props.playing && !reduced}
-                  active={district}
+                  active={district ?? spiralFocus}
                   onSelect={(d) => visit(d)}
                   onMemory={(day) => {
                     const m = memories.find((m) => m.day === day);
@@ -304,6 +341,7 @@ export default function MindUniverse(props: Props) {
                 <Scene
                   entered={entered}
                   room={room}
+                  spiralProgress={spiralProgress}
                   state={state}
                   rules={rules}
                   history={history}
@@ -404,7 +442,7 @@ export default function MindUniverse(props: Props) {
             >
               <div className="entrance-copy">
                 <span className="cosmic-eyebrow">
-                  A FICTIONAL MODEL OF COMPETING PRIORITIES
+                  EXPLORE THE WORLD WITHIN
                 </span>
                 <h1>MINDSPACE</h1>
                 <p className="entrance-lede">
@@ -413,8 +451,7 @@ export default function MindUniverse(props: Props) {
                   them.
                 </p>
                 <div className="entrance-dilemma">
-                  <span>AN EXAMPLE DILEMMA</span>
-                  Your presentation is due in {rules.taskDeadlineDay} days.
+                  <span>AN EXAMPLE DILEMMA</span>{taskText(rules, " Your presentation is due in ")}{rules.taskDeadlineDay} days.
                   Your friend is only here today.
                 </div>
                 <button className="enter-mind" onClick={props.onEnter}>
@@ -442,7 +479,7 @@ export default function MindUniverse(props: Props) {
                       {districtInfo[voice].name.toUpperCase()} ·{" "}
                       {voices[voice].guards.toUpperCase()}
                     </span>
-                    <b>“{voices[voice].line}”</b>
+                    <b>“{introLine(voice,rules,state.day)}”</b>
                     <small>{voices[voice].wants}</small>
                   </>
                 ) : (
@@ -471,7 +508,6 @@ export default function MindUniverse(props: Props) {
               </div>
               <div className="entrance-foot">
                 <span>A COMPOSITION OF PRIORITIES · DURHACK 2026</span>
-                <span>A FICTIONAL MODEL. NOT A DIAGNOSIS.</span>
               </div>
             </motion.main>
           ) : (
@@ -500,13 +536,19 @@ export default function MindUniverse(props: Props) {
                   <span>.</span>
                 </h1>
                 <p>{info.subtitle}</p>
-                <span className="travel-status" role="status">
-                  {arrived
-                    ? room === "hub"
-                      ? "Choose an island or follow a pathway."
-                      : "You’ve arrived. Stay curious."
-                    : "Following the neural pathways…"}
-                </span>
+                {!arrived && <span className="travel-status" role="status">Travelling to {info.title}…</span>}
+                {room === "hub" && <div className="hub-spiral-control">
+                  <label htmlFor="hub-spiral-position">Explore the hub spiral</label>
+                  <input id="hub-spiral-position" type="range" min={0} max={1000}
+                    value={Math.round(spiralProgress * 1000)}
+                    aria-valuetext={spiralFocus ? districtInfo[spiralFocus].name : "Hub overview"}
+                    onChange={event => setSpiralProgress(Number(event.target.value) / 1000)} />
+                  <small>
+                    <span className="room-wheel-hint">Scroll the scene</span>
+                    <span className="room-swipe-hint">Swipe the scene</span>
+                    {" · "}{spiralFocus ? districtInfo[spiralFocus].name : "Hub overview"}
+                  </small>
+                </div>}
               </div>
               )}
               {room === "hub" && !props.guided && (
@@ -539,7 +581,7 @@ export default function MindUniverse(props: Props) {
                       maxLength={400}
                       value={thought}
                       onChange={(e) => setThought(e.target.value)}
-                      placeholder="My presentation is in three days, but my friend is only here today…"
+                      placeholder={taskText(rules, "My presentation is in three days, but my friend is only here today…")}
                       required
                     />
                     <div className="thought-prompts">
@@ -547,7 +589,7 @@ export default function MindUniverse(props: Props) {
                         type="button"
                         onClick={() => {
                           setThought(
-                            "My presentation is due, but my friend is visiting.",
+                            taskText(rules, "My presentation is due, but my friend is visiting."),
                           );
                           onSetup({ ...judgeSetup });
                         }}
@@ -558,7 +600,7 @@ export default function MindUniverse(props: Props) {
                         type="button"
                         onClick={() =>
                           setThought(
-                            "I’m exhausted, but my presentation is almost done.",
+                            taskText(rules, "I’m exhausted, but my presentation is almost done."),
                           )
                         }
                       >
@@ -631,7 +673,7 @@ export default function MindUniverse(props: Props) {
                             aria-label="Starting task progress"
                             type="number"
                             min="0"
-                            max="30"
+                            max={rules.taskGoal}
                             value={setup.taskProgress}
                             onChange={(e) =>
                               onSetup({
@@ -688,11 +730,6 @@ export default function MindUniverse(props: Props) {
                       <ArrowRight size={15} />
                     </button>
                   </form>
-                  <p className="thought-disclosure">
-                    Local, not AI. A few literal keywords prefill answers
-                    (“almost done”, “tired”); next you confirm the deadline,
-                    any visit, progress and energy. Nothing is sent or saved.
-                  </p>
                   {thoughtResult && (
                     <div className="thought-response" role="status">
                       <span>✧</span>
@@ -744,7 +781,7 @@ export default function MindUniverse(props: Props) {
                     </strong>
                     <span>
                       {district === "A"
-                        ? `of ${rules.taskGoal} presentation points`
+                        ? taskText(rules, `of ${rules.taskGoal} presentation points`)
                         : district === "C"
                           ? `of ${rules.connectionGoal} visit points`
                           : district === "D"
@@ -785,79 +822,16 @@ export default function MindUniverse(props: Props) {
                 </motion.section>
               )}
               {room === "memory" && !props.staged && (
-                <section className="memory-shelf cosmic-panel glass">
-                  <span className="cosmic-eyebrow">
-                    ONLY MOMENTS THAT REALLY HAPPENED
-                  </span>
-                  <h2>
-                    {memories.length
-                      ? "A constellation of moments."
-                      : "Your story is still unwritten."}
-                  </h2>
-                  {memories.length ? (
-                    <>
-                      <label htmlFor="memory-select">Choose a memory</label>
-                      <select
-                        id="memory-select"
-                        value={memoryId ?? ""}
-                        onChange={(e) => setMemoryId(e.target.value)}
-                      >
-                        <option value="" disabled>
-                          Follow a glowing orb…
-                        </option>
-                        {memories.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            Day {m.day} / {m.title}
-                          </option>
-                        ))}
-                      </select>
-                      {memory && (
-                        <motion.div
-                          className="selected-memory"
-                          key={memory.id}
-                          {...motionProps}
-                          animate={{ opacity: 1, y: 0 }}
-                        >
-                          <span
-                            className="memory-gem"
-                            style={{
-                              color: districtInfo[memory.district].color,
-                            }}
-                          >
-                            ◈
-                          </span>
-                          <span className="cosmic-eyebrow">
-                            DAY {memory.day} ·{" "}
-                            {memory.manual ? "INTERVENTION" : "ELECTED CHOICE"}
-                          </span>
-                          <h3>{memory.title}</h3>
-                          <p>{memory.outcome}</p>
-                          <small>{memory.choice}</small>
-                          <button
-                            className="journey-link"
-                            onClick={() => props.onInspect(memory.day)}
-                          >
-                            Trace this moment in the Observatory{" "}
-                            <ArrowRight size={14} />
-                          </button>
-                        </motion.div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <p>
-                        Resolve your first day and its real outcomes become
-                        glowing memories.
-                      </p>
-                      <button
-                        className="journey-link"
-                        onClick={() => visit("decision")}
-                      >
-                        Make a first memory <ArrowRight size={14} />
-                      </button>
-                    </>
-                  )}
-                </section>
+                <MemoryShelf
+                  history={history}
+                  rules={rules}
+                  memories={memories}
+                  memory={memory}
+                  onSelect={setMemoryId}
+                  onInspect={props.onInspect}
+                  onReplay={props.onReplayMemory}
+                  onFirstDay={() => visit("decision")}
+                />
               )}
               <div
                 className={`room-content ${arrived ? "has-arrived" : "is-travelling"}`}
@@ -865,10 +839,10 @@ export default function MindUniverse(props: Props) {
               >
                 {props.children}
               </div>
-              {props.stage}
+              <BrainMotionContext.Provider value={reduced}>{props.stage}</BrainMotionContext.Provider>
               {props.guided && !props.staged && (
                 <div className="resume-bar glass" role="status">
-                  Journey paused while you explore. Nothing advances.
+                  Journey paused.
                   <button className="cosmic-primary" onClick={props.onResume}>
                     Resume journey <ArrowRight size={14} />
                   </button>
@@ -882,9 +856,9 @@ export default function MindUniverse(props: Props) {
                   {String(
                     props.frozen && pair
                       ? pair.a.before.day
-                      : Math.min(state.day, rules.maxDays),
+                      : Math.min(isWorldComplete(state, rules) ? (history.at(-1)?.before.day ?? state.day) : state.day, rules.taskDeadlineDay),
                   ).padStart(2, "0")}{" "}
-                  <small>/ {rules.maxDays}</small>
+                  <small>/ {rules.taskDeadlineDay}</small>
                 </span>
                 <button
                   aria-label={
@@ -896,7 +870,7 @@ export default function MindUniverse(props: Props) {
                         ? "Pause world"
                         : "Play world"
                   }
-                  disabled={!props.frozen && state.day > rules.maxDays}
+                  disabled={!props.frozen && isWorldComplete(state, rules)}
                   onClick={props.onPlay}
                 >
                   {props.playing ? <Pause size={15} /> : <Play size={15} />}
@@ -908,7 +882,7 @@ export default function MindUniverse(props: Props) {
                       ? "Frozen comparison. Return to Decisions to step the live world."
                       : "Step one day"
                   }
-                  disabled={props.frozen || state.day > rules.maxDays}
+                  disabled={props.frozen || isWorldComplete(state, rules)}
                   onClick={props.onStep}
                 >
                   <SkipForward size={15} />
@@ -932,16 +906,7 @@ export default function MindUniverse(props: Props) {
                   <span>Hub</span>
                 </button>
                 <span className="dock-divider" />
-                {(
-                  [
-                    "headquarters",
-                    "memory",
-                    "decision",
-                    "parallel",
-                    "observatory",
-                    "symphony",
-                  ] as const
-                ).map((place) => (
+                {chamberRoute.map((place) => (
                   <button
                     key={place}
                     className={room === place ? "current-location" : ""}
@@ -965,7 +930,6 @@ export default function MindUniverse(props: Props) {
                           decision: "Decisions",
                           parallel: "Worlds",
                           observatory: "Observe",
-                          symphony: "Symphony",
                         }[place]
                       }
                     </span>
@@ -1010,6 +974,7 @@ export default function MindUniverse(props: Props) {
                     <button
                       key={d}
                       onClick={() => visit(d)}
+                      data-spiral-focus={spiralFocus === d}
                       style={
                         { "--island": locations[d].color } as CSSProperties
                       }

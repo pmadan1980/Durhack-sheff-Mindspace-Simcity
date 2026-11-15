@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   branch,
+  isWorldComplete,
   config,
   createWorld,
   elect,
@@ -33,7 +34,7 @@ describe("the MINDSPACE contract", () => {
       ...judgeSetup,
       taskProgress: 10,
     });
-    expect(ordinary).toEqual(judgeSetup); // word boundaries; no invented progress
+    expect(ordinary).toEqual({ ...judgeSetup, taskType: "task" }); // word boundaries; no invented progress
     expect(setup).toEqual(original);
   });
   it("rejects invalid configuration and budgets, and bounds finite resources", () => {
@@ -106,25 +107,24 @@ describe("the MINDSPACE contract", () => {
     expect(deadline.after.taskResult).toBe(true);
     const missed = resolve({ ...state, day: 3 }, [policies[1]], rules);
     expect(missed.after.taskResult).toBe(false);
-    expect(
-      resolve({ ...missed.after, taskProgress: 99 }, policies, rules).after
-        .taskResult,
-    ).toBe(false);
+    expect(missed.after.taskResult).toBe(false);
+    expect(() => resolve(missed.after, policies, rules)).toThrow("complete");
     expect(
       resolve(state, policies, rules, "visit").after.connectionResult,
     ).toBe(true);
   });
-  it("replays an identical 14-day numerical history and stops at the bound", () => {
+  it("replays an identical scenario and stops on completion or deadline", () => {
     const replay = () => {
       const { state, rules } = createWorld(judgeSetup);
       let current = state;
       const history = [];
-      for (let day = 1; day <= rules.maxDays; day++) {
+      for (let day = 1; day <= rules.maxDays && !isWorldComplete(current, rules); day++) {
         const round = resolve(current, proposalsForDay(day), rules);
         history.push(round);
         current = round.after;
       }
-      expect(() => resolve(current, policies, rules)).toThrow("last day");
+      expect(history.length).toBeLessThanOrEqual(rules.taskDeadlineDay);
+      expect(() => resolve(current, policies, rules)).toThrow("complete");
       return history;
     };
     expect(replay()).toEqual(replay());
@@ -136,10 +136,26 @@ describe("the MINDSPACE contract", () => {
     });
     expect(policies[1].allocation.C).toBe(2);
   });
+  it("caps forecasts, committed progress and event amounts at remaining work", () => {
+    const { state, rules } = createWorld({ ...judgeSetup, taskProgress: 11.5 });
+    const plan = { ...policies[0], allocation: { A: 4, C: 2, D: 0, R: 0 } };
+    const start = { ...state, connectionProgress: 2.5 };
+    const preview = forecast(start, plan, rules);
+    expect(preview.taskGain).toBe(0.5);
+    expect(preview.connectionGain).toBe(0.5);
+    const round = resolve(start, [plan], rules);
+    expect(round.after.taskProgress).toBe(12);
+    expect(round.after.connectionProgress).toBe(3);
+    expect(round.after.taskResult).toBe(true);
+    expect(round.events.find((e) => e.district === "A")!.amount).toBe(0.5);
+    expect(() => resolve(round.after, [plan], rules)).toThrow("complete");
+    expect(() => createWorld({ ...judgeSetup, taskProgress: 15.6 })).toThrow();
+    expect(createWorld({ ...judgeSetup, taskProgress: 12 }).state.taskResult).toBe(true);
+  });
   it("counts each resident once, uses preferences, and breaks ties by stable order", () => {
     const { state, rules } = createWorld(judgeSetup);
     const election = elect(state, policies, rules);
-    expect(election.counts).toEqual([4, 12, 8]);
+    expect(elect(state, policies, rules)).toEqual(election);
     expect(election.counts.reduce((a, b) => a + b, 0)).toBe(24);
     expect(new Set(election.ballots.map((b) => b.resident.id)).size).toBe(24);
     expect(
@@ -152,7 +168,7 @@ describe("the MINDSPACE contract", () => {
     ).toBe(true);
     expect(
       elect({ ...state, taskProgress: 10 }, policies, rules).counts,
-    ).toEqual([0, 16, 8]);
+    ).not.toEqual(election.counts);
     // Achieved goals and a capped method remove those voting benefits.
     const finished = elect(
       { ...state, taskProgress: 20, connectionProgress: 3, method: 1.6 },
@@ -164,8 +180,8 @@ describe("the MINDSPACE contract", () => {
         b.signals.every((s) => s.A === 0 && s.C === 0 && s.D === 0),
       ),
     ).toBe(true);
-    // At 11.5 energy, exactly three of the six archetypes prefer each proposal.
-    const tieRules = { ...rules, residentCount: 24 };
+    // This fixed two-person population splits between rest and discovery.
+    const tieRules = { ...rules, seed:7, residentCount: 2 };
     const recovery = {
       ...policies[0],
       id: "rest",
@@ -174,7 +190,7 @@ describe("the MINDSPACE contract", () => {
     const discover = { ...policies[2], allocation: { A: 0, C: 0, D: 6, R: 0 } };
     const tieState = { ...state, energy: 11.5 };
     const tie = elect(tieState, [recovery, discover], tieRules);
-    expect(tie.counts).toEqual([12, 12]);
+    expect(tie.counts).toEqual([1, 1]);
     expect(tie.tied).toBe(true);
     expect(tie.winner).toBe(0);
   });

@@ -72,6 +72,21 @@ export function mixGains(x: number): [number, number] {
   const bounded = Math.max(0, Math.min(1, x));
   return [Math.cos((bounded * Math.PI) / 2), Math.sin((bounded * Math.PI) / 2)];
 }
+const debateScore: Score = {
+  density: { A: 4, C: 2, D: 2, R: 1 },
+  methodLift: 0,
+  recoveryEcho: false,
+  energy: 0.55,
+};
+
+// Preserve the chamber rhythm, with a distinct register and timbre for each speaker.
+const debateInstruments = {
+  A: { harmonics: [1, 0.45, 0.2, 0.08], transpose: 0, attack: 0.009, tail: 0.25 }, // plucked keys
+  C: { harmonics: [1, 0.08, 0.32], transpose: -5, attack: 0.065, tail: 0.55 }, // warm reed
+  D: { harmonics: [1, 0, 0.58, 0, 0.26], transpose: 12, attack: 0.007, tail: 0.38 }, // bright bell
+  R: { harmonics: [1, 0.12], transpose: 12, attack: 0.19, tail: 1.35 }, // sustained bass
+} satisfies Record<District, { harmonics: number[]; transpose: number; attack: number; tail: number }>;
+
 interface Frame {
   a: Score;
   b?: Score;
@@ -85,6 +100,8 @@ class AudioEngine {
   private meterData = new Float32Array(32);
   private timer?: ReturnType<typeof setInterval>;
   private beat = 0;
+  private debateWaves = new Map<District, PeriodicWave>();
+  private debateSpeaker: District | null | undefined;
   private nextTime = 0;
   private frame?: Frame;
   private pending?: Frame;
@@ -125,6 +142,10 @@ class AudioEngine {
     await this.context.resume();
     return this.context.state === "running";
   }
+  setDebateSpeaker(speaker: District | null | undefined) {
+    this.debateSpeaker = speaker;
+    this.updateGains();
+  }
   level(district: District) {
     let energy = 0;
     for (const world of this.meters) {
@@ -152,10 +173,13 @@ class AudioEngine {
       0.04,
     );
     const gains = mixGains(this.mix);
+    const debating = this.debateSpeaker !== undefined;
     this.channels.forEach((world, i) =>
       world.forEach((gain, d) => {
         gain.gain.setTargetAtTime(
-          !this.solo || this.solo === districts[d] ? gains[i] : 0,
+          debating
+            ? i === 0 ? (this.debateSpeaker === districts[d] ? 1 : 0.12) : 0
+            : (!this.solo || this.solo === districts[d] ? gains[i] : 0),
           now,
           0.04,
         );
@@ -182,7 +206,7 @@ class AudioEngine {
         this.frame = this.pending;
         this.pending = undefined;
       }
-      const frame = this.frame;
+      const frame = this.debateSpeaker === undefined ? this.frame : { a: debateScore, b: undefined };
       if (frame)
         [frame.a, frame.b].forEach((score, world) => {
           if (!score) return;
@@ -234,12 +258,25 @@ class AudioEngine {
     const ctx = this.context!;
     const osc = ctx.createOscillator();
     const envelope = ctx.createGain();
-    osc.type = audioConfig.voices[d];
+    const instrument = this.debateSpeaker === undefined ? undefined : debateInstruments[d];
+    if (instrument) {
+      let wave = this.debateWaves.get(d);
+      if (!wave) {
+        const harmonics = new Float32Array([0, ...instrument.harmonics]);
+        wave = ctx.createPeriodicWave(new Float32Array(harmonics.length), harmonics);
+        this.debateWaves.set(d, wave);
+      }
+      osc.setPeriodicWave(wave);
+      midi += instrument.transpose;
+      duration = instrument.tail;
+    } else {
+      osc.type = audioConfig.voices[d];
+    }
     osc.frequency.value = 440 * 2 ** ((midi - 69) / 12);
     envelope.gain.setValueAtTime(0, time);
     envelope.gain.linearRampToValueAtTime(
       d === "R" ? 0.35 : 0.3,
-      time + audioConfig.attack,
+      time + (instrument?.attack ?? audioConfig.attack),
     );
     envelope.gain.exponentialRampToValueAtTime(
       0.001,
@@ -255,6 +292,22 @@ class AudioEngine {
     osc.start(time);
     osc.stop(time + duration + 0.05);
   }
+  resolveComposition(active: District[]) {
+    const ctx=this.context;
+    if(!ctx || ctx.state!=="running" || !this.master || this.muted || this.volume<=0)return;
+    this.stop();
+    const notes:Record<District,number>={A:261.63,C:329.63,D:392,R:130.81};
+    active.forEach((d,index)=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      const start=ctx.currentTime+.04+index*.12;
+      osc.type="sine";osc.frequency.value=notes[d];
+      gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.22,start+.35);
+      gain.gain.exponentialRampToValueAtTime(.001,start+3.2);
+      osc.connect(gain).connect(this.master!);this.voices.add(osc);
+      osc.onended=()=>{this.voices.delete(osc);osc.disconnect();gain.disconnect();};
+      osc.start(start);osc.stop(start+3.3);
+    });
+  }
   stop() {
     clearInterval(this.timer);
     this.timer = undefined;
@@ -269,6 +322,7 @@ class AudioEngine {
   }
   reset() {
     this.stop();
+    this.setDebateSpeaker(undefined);
     this.frame = undefined;
     this.pending = undefined;
     this.beat = 0;
@@ -277,6 +331,7 @@ class AudioEngine {
     this.reset();
     void this.context?.close();
     this.context = undefined;
+    this.debateWaves.clear();
     this.channels = [];
     this.meters = [];
   }

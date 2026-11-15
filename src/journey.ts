@@ -1,5 +1,6 @@
 import {
   actionState,
+  isWorldComplete,
   createWorld,
   districts,
   elect,
@@ -52,7 +53,6 @@ export const worldSteps: { scene: Scene; label: string }[] = [
   { scene: "summary", label: "Story" },
   { scene: "branch", label: "What if" },
   { scene: "comparison", label: "Side by side" },
-  { scene: "listen", label: "Listen" },
   { scene: "closing", label: "Reflect" },
 ];
 
@@ -145,7 +145,7 @@ function commit(j: Journey): World {
   };
 }
 function finishFree(w: World): World {
-  if (w.state.day > w.rules.maxDays) return { ...w, playing: false };
+  if (isWorldComplete(w.state, w.rules)) return { ...w, playing: false };
   const round = resolve(w.state, w.proposals, w.rules);
   return {
     ...w,
@@ -153,8 +153,30 @@ function finishFree(w: World): World {
     history: [...w.history, round].slice(-w.rules.historyLimit),
     proposals: proposalsForDay(round.after.day, undefined, w.rules),
     elapsed: 0,
-    playing: w.playing && round.after.day <= w.rules.maxDays,
+    playing: w.playing && !isWorldComplete(round.after, w.rules),
   };
+}
+
+/** Back navigation changes the presentation, never the committed world. */
+export function previousScene(j: Journey): Scene | null {
+  if ((j.scene === "voting" || j.scene === "result") && j.locked && roundFor(j.world.history,j.locked.day)) return null;
+  switch(j.scene) {
+    case "clarify": return "thought";
+    case "briefing": return j.world.history.length ? "reflection" : "clarify";
+    case "introductions": return "briefing";
+    case "debate": return j.world.state.day === 1 && !j.world.history.length ? "introductions" : "briefing";
+    case "intervention": return "debate";
+    case "voting": return "intervention";
+    case "result": return "voting";
+    case "consequences": return "result";
+    case "reflection": return "consequences";
+    case "summary": return j.world.history.length ? "reflection" : "clarify";
+    case "branch": return "summary";
+    case "comparison": return "branch";
+    case "listen": return "comparison";
+    case "closing": return "comparison";
+    default: return null;
+  }
 }
 
 export function journeyReducer(j: Journey, a: JourneyAction): Journey {
@@ -221,19 +243,27 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
             counting: false,
           }
         : j;
-    case "back":
+    case "back": {
       if (a.from !== j.scene) return j;
-      if (j.scene === "consequences") return { ...j, scene: "result" };
-      if (j.scene === "intervention") return { ...j, scene: "debate" };
-      if (j.scene === "briefing" && w.history.length === 0)
-        return { ...j, scene: "clarify" };
-      return j;
+      const scene=previousScene(j);
+      if (!scene) return j;
+      let locked=j.locked;
+      if (scene === "intervention" || scene === "clarify" || scene === "thought") locked=null;
+      if (scene === "reflection" && !locked) {
+        const last=w.history.at(-1);
+        if (!last) return j;
+        locked={day:last.before.day,start:last.start,proposals:last.policies,election:last.election};
+      }
+      return {...j,scene,locked,counting:false,line:0};
+    }
     case "advance": {
       if (a.from !== j.scene) return j; // stale or repeated click
       const day = w.state.day;
+      if (["clarify", "briefing", "introductions", "debate", "intervention"].includes(j.scene) &&
+          isWorldComplete(w.state, w.rules)) return { ...j, scene: "summary" };
       switch (j.scene) {
         case "clarify":
-          return { ...j, scene: "briefing" };
+          return { ...j, scene: isWorldComplete(w.state, w.rules) ? "summary" : "briefing" };
         case "briefing":
           return {
             ...j,
@@ -271,7 +301,7 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
         case "consequences":
           return { ...j, scene: "reflection" };
         case "reflection":
-          return day > lastGuidedDay(w.rules)
+          return isWorldComplete(w.state, w.rules)
             ? { ...j, scene: "summary" }
             : {
                 ...j,
@@ -282,11 +312,11 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
                 line: 0,
               };
         case "summary":
-          return { ...j, scene: "branch" };
+          return w.history.length ? { ...j, scene: "branch" } : j;
         case "branch":
           return { ...j, scene: "comparison" };
         case "comparison":
-          return { ...j, scene: "listen" };
+          return { ...j, scene: "closing" };
         case "listen":
           return { ...j, scene: "closing" };
         case "closing":
@@ -298,7 +328,7 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
     // Free exploration keeps the original playback clock, and only there.
     case "play":
       return j.scene === "free"
-        ? { ...j, world: { ...w, playing: w.state.day <= w.rules.maxDays } }
+        ? { ...j, world: { ...w, playing: !isWorldComplete(w.state, w.rules) } }
         : j;
     case "pause":
       return { ...j, world: { ...w, playing: false }, counting: false };
@@ -336,12 +366,17 @@ export function journeyReducer(j: Journey, a: JourneyAction): Journey {
 
 /** Deterministic reveal order that interleaves the four district groups. */
 export function revealOrder(n: number): number[] {
-  const group = Math.ceil(n / districts.length);
-  return Array.from({ length: n }, (_, i) => i).sort(
-    (x, y) =>
-      (x % group) - (y % group) || Math.floor(x / group) - Math.floor(y / group),
-  );
+  const order=Array.from({length:n},(_,i)=>i);
+  // Stable Fisher–Yates order, independent of residents' preferences and votes.
+  let seed=(0x9e3779b9 ^ n)>>>0;
+  for(let i=n-1;i>0;i--){
+    seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+    const j=Math.floor(seed/4294967296*(i+1));
+    [order[i],order[j]]=[order[j],order[i]];
+  }
+  return order;
 }
+
 export function revealedBallots(locked: Locked, revealed: number) {
   return revealOrder(locked.election.ballots.length)
     .slice(0, revealed)

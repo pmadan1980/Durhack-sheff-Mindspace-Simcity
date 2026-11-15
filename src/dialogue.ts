@@ -1,3 +1,4 @@
+import { taskText } from "./simulation";
 import {
   districtInfo,
   districts,
@@ -18,8 +19,8 @@ export const voices: Record<
 > = {
   A: {
     line: "Let's make progress before the deadline.",
-    wants: "Turn today's time into presentation progress.",
-    guards: "Presentation points",
+    wants: "Turn today's time into task progress.",
+    guards: "Task points",
   },
   C: {
     line: "Your friend is here today. That chance closes tonight.",
@@ -37,6 +38,15 @@ export const voices: Record<
     guards: "Energy tokens",
   },
 };
+
+export function introLine(d: District, c: Config, day = 1): string {
+  if (d !== "C") return voices[d].line;
+  if (c.connectionLastOpenDay === 0) return "No visit is competing for time today.";
+  if (day > c.connectionLastOpenDay) return "The visit window has closed.";
+  return day === c.connectionLastOpenDay
+    ? "The visit is possible today. This chance closes tonight."
+    : `The visit is possible until the end of day ${c.connectionLastOpenDay}.`;
+}
 
 export type Speaker = District | "N";
 export interface Line {
@@ -75,8 +85,8 @@ export function debate(start: State, ps: Policy[], c: Config): Line[] {
     policy: pa,
     text:
       remaining <= 0
-        ? `The presentation is already at ${fmt(start.taskProgress)} of ${c.taskGoal} points, so it's done. I'd still back ${A.name}, but I won't pretend we're behind.`
-        : `Let's back ${A.name}. Its ${A.allocation.A} presentation blocks add ${fmt(fa.taskGain)} points today, ${start.taskProgress + fa.taskGain >= c.taskGoal ? "which finishes the presentation" : `leaving ${fmt(remaining - fa.taskGain)} of ${c.taskGoal} still to do`}. ${deadline}`,
+        ? taskText(c, `The presentation is already at ${fmt(start.taskProgress)} of ${c.taskGoal} points, so it's done. I'd still back ${A.name}, but I won't pretend we're behind.`)
+        : taskText(c, `Let's back ${A.name}. Its ${A.allocation.A} presentation blocks add ${fmt(fa.taskGain)} points today, ${start.taskProgress + fa.taskGain >= c.taskGoal ? "which finishes the presentation" : `leaving ${fmt(remaining - fa.taskGain)} of ${c.taskGoal} still to do`}. ${deadline}`),
   });
   if (c.connectionLastOpenDay === 0) {
     lines.push({
@@ -119,11 +129,11 @@ export function debate(start: State, ps: Policy[], c: Config): Line[] {
           ? `Our method is already at its ${c.methodCap}× ceiling, so extra Discovery blocks add nothing now.`
           : start.day >= c.taskDeadlineDay
             ? `${D.name} improves the method by ${signed(fd.methodGain, 2)}×, but that only applies from tomorrow, after the deadline.`
-            : `${D.name} puts ${D.allocation.D} blocks into method: ${signed(fd.methodGain, 2)}× on presentation work from tomorrow, not today. Today it adds ${fmt(fd.taskGain)} presentation points, against ${fmt(fa.taskGain)} for ${A.name}.`,
+            : taskText(c, `${D.name} puts ${D.allocation.D} blocks into method: ${signed(fd.methodGain, 2)}× on presentation work from tomorrow, not today. Today it adds ${fmt(fd.taskGain)} presentation points, against ${fmt(fa.taskGain)} for ${A.name}.`),
   });
   lines.push({
     speaker: "N",
-    text: `Six blocks can't buy everything. Each plan trades presentation progress, ${c.connectionLastOpenDay ? "the visit, " : ""}shared energy and future method differently. Next you can change a plan, and then ${c.residentCount} residents vote.`,
+    text: taskText(c, `Six blocks can't buy everything. Each plan trades presentation progress, ${c.connectionLastOpenDay ? "the visit, " : ""}shared energy and future method differently. Next you can change a plan, and then ${c.residentCount} residents vote.`),
   });
   return lines;
 }
@@ -137,15 +147,15 @@ export function sinceYesterday(prev: Round, start: State, c: Config): string[] {
     );
   notes.push(
     start.taskProgress >= c.taskGoal
-      ? `The presentation is complete at ${fmt(start.taskProgress)} of ${c.taskGoal} points.`
-      : `The presentation is at ${fmt(start.taskProgress)} of ${c.taskGoal} points, due at the end of day ${c.taskDeadlineDay}${start.day === c.taskDeadlineDay ? " (today)" : ""}.`,
+      ? taskText(c, `The presentation is complete at ${fmt(start.taskProgress)} of ${c.taskGoal} points.`)
+      : taskText(c, `The presentation is at ${fmt(start.taskProgress)} of ${c.taskGoal} points, due at the end of day ${c.taskDeadlineDay}${start.day === c.taskDeadlineDay ? " (today)" : ""}.`),
   );
   notes.push(
     `Energy ended yesterday at ${fmt(prev.after.energy)} tokens. This morning: ${start.energy === prev.after.energy ? "no change" : `${signed(start.energy - prev.after.energy)} token${Math.abs(start.energy - prev.after.energy) === 1 ? "" : "s"}`}, so we start at ${fmt(start.energy)} of ${c.energyCap}.`,
   );
   if (start.method > 1)
     notes.push(
-      `The method investment carries forward: presentation work now runs at ${fmt(start.method, 2)}×.`,
+      taskText(c, `The method investment carries forward: presentation work now runs at ${fmt(start.method, 2)}×.`),
     );
   return notes;
 }
@@ -165,7 +175,7 @@ export function answer(
   if (q === 0) {
     if (d === "A")
       return start.taskProgress >= c.taskGoal
-        ? "Honestly, the presentation is already done. I care about keeping it that way."
+        ? taskText(c, "Honestly, the presentation is already done. I care about keeping it that way.")
         : `We have ${fmt(start.taskProgress)} of ${c.taskGoal} points and the deadline is day ${c.taskDeadlineDay}. Every block I get today is worth ${fmt(x.energyFactor * start.method * c.achievementRate, 2)} points.`;
     if (d === "C")
       return c.connectionLastOpenDay === 0
@@ -176,12 +186,12 @@ export function answer(
     if (d === "D")
       return start.method >= c.methodCap
         ? `The method is at its ${c.methodCap}× ceiling. I've done my part.`
-        : `The method multiplier is ${fmt(start.method, 2)}×. Each Discovery block adds ${c.discoveryMethodGain}× to every presentation block from tomorrow on.`;
-    return `Energy sets the pace. At ${fmt(start.energy)} of ${c.energyCap} tokens, each presentation block works at ${fmt(x.energyFactor, 2)}× strength. Recovery blocks restore ${c.recoveryRate} tokens each, up to the cap.`;
+        : taskText(c, `The method multiplier is ${fmt(start.method, 2)}×. Each Discovery block adds ${c.discoveryMethodGain}× to every presentation block from tomorrow on.`);
+    return taskText(c, `Energy sets the pace. At ${fmt(start.energy)} of ${c.energyCap} tokens, each presentation block works at ${fmt(x.energyFactor, 2)}× strength. Recovery blocks restore ${c.recoveryRate} tokens each, up to the cap.`);
   }
   const best = (k: (a: Activity) => number) => argmax(f.map(k));
   const gaps = [
-    { k: "presentation points", v: (a: Activity) => a.taskGain },
+    { k: taskText(c, "presentation points"), v: (a: Activity) => a.taskGain },
     { k: "visit points", v: (a: Activity) => a.connectionGain },
     { k: "energy tokens", v: (a: Activity) => a.energyDelta },
     { k: "method", v: (a: Activity) => a.methodGain * 20 },
@@ -209,7 +219,7 @@ export function reaction(before: Policy, after: Policy, start: State, c: Config)
   const more = `${Math.abs(n)} ${n > 0 ? "more" : "fewer"} ${districtInfo[d].name} block${Math.abs(n) === 1 ? "" : "s"}`;
   const text =
     d === "A"
-      ? `${more}: today's presentation forecast goes from ${fmt(fb.taskGain)} to ${fmt(fa.taskGain)} points.`
+      ? taskText(c, `${more}: today's presentation forecast goes from ${fmt(fb.taskGain)} to ${fmt(fa.taskGain)} points.`)
       : d === "C"
         ? fa.connectionOpen
           ? `${more}: the visit forecast goes from ${fmt(fb.connectionGain)} to ${fmt(fa.connectionGain)} points.`
@@ -231,7 +241,7 @@ export function reactions(winner: number, ps: Policy[], start: State, c: Config)
     .sort((a, b) => b.gap - a.gap)[0];
   const says = (d: District) =>
     d === "A"
-      ? `+${fmt(f.taskGain)} presentation points today`
+      ? taskText(c, `+${fmt(f.taskGain)} presentation points today`)
       : d === "C"
         ? `+${fmt(f.connectionGain)} visit points before tonight`
         : d === "D"
