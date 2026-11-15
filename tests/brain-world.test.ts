@@ -19,9 +19,22 @@ describe("thought pathways",()=>{
   });
   it("does not reveal a quiet region's illuminated image or route",()=>{
     const html=renderToStaticMarkup(createElement(BrainWorld,{active:["A","R"]}));
-    expect(html.match(/class="brain-awake"/g)).toHaveLength(2);
+    expect(html.match(/class="brain-awake /g)).toHaveLength(2);
     expect(html.match(/class="brain-route/g)).toHaveLength(2);
     expect(html).toContain("Connection, Discovery quiet.");
+  });
+  it.each(["A","D","R"] as const)("coordinates the artwork and signal with speaker %s",speaker=>{
+    const html=renderToStaticMarkup(createElement(BrainWorld,{active:["A","D","R"],speaker,mode:"debate"}));
+    expect(html).toContain(`data-speaker="${speaker}"`);
+    expect(html.match(/class="brain-awake region-speaking"/g)).toHaveLength(1);
+    expect(html.match(/class="brain-awake region-listening"/g)).toHaveLength(2);
+    expect(html.match(/class="brain-route is-speaking"/g)).toHaveLength(1);
+  });
+  it("makes regions accessible as question targets when interactive",()=>{
+    const html=renderToStaticMarkup(createElement(BrainWorld,{active:["A","R"],speaker:"A",mode:"debate",onRegionSelect:()=>{}}));
+    expect(html).toContain('role="group"');
+    expect(html).toContain('aria-label="Ask Achievement a question"');
+    expect(html).toContain('aria-label="Ask Recovery a question"');
   });
   it("honours the app's reduced motion setting without an automatic animation clock",()=>{
     const html=renderToStaticMarkup(createElement(BrainMotionContext.Provider,{value:true},createElement(BrainTransition,{thought:"My assignment is due and I am tired",onDone:()=>{}})));

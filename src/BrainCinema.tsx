@@ -9,22 +9,24 @@ import EverydayScene from "./EverydayScene";
 
 export type BrainBeat = "awakening" | "choice" | "memory" | "split" | "dream";
 
-export function BrainWorld({active,speaker,mode="awakening"}:{active:District[];speaker?:District|null;mode?:BrainBeat|"debate"}) {
+export function BrainWorld({active,speaker,mode="awakening",onRegionSelect}:{active:District[];speaker?:District|null;mode?:BrainBeat|"debate";onRegionSelect?:(d:District)=>void}) {
   const [failed,setFailed]=useState(false);
   const neonId=useId().replaceAll(":", "");
-  return <div className={`brain-world brain-${mode}`} role="img" aria-label={`Inner world. Active priorities: ${active.map(d=>districtInfo[d].name).join(", ") || "none selected yet"}. ${districts.filter(d=>!active.includes(d)).map(d=>districtInfo[d].name).join(", ")} quiet.`}>
+  return <div className={`brain-world brain-${mode}`} data-speaker={mode==="debate" ? speaker ?? undefined : undefined} style={speaker?{"--speaking-color":brainRegions[speaker].color} as CSSProperties:undefined} role={onRegionSelect?"group":"img"} aria-label={`${mode==="debate" && speaker ? `${districtInfo[speaker].name} is speaking. ` : ""}Inner world. Active priorities: ${active.map(d=>districtInfo[d].name).join(", ") || "none selected yet"}. ${districts.some(d=>!active.includes(d)) ? `${districts.filter(d=>!active.includes(d)).map(d=>districtInfo[d].name).join(", ")} quiet.` : ""}`}>
     {!failed && <img className="brain-dormant" src="/art/brain-world/dormant.png" alt="" draggable={false} onError={()=>setFailed(true)} />}
-    {active.map((d,i)=><img key={d} className="brain-awake" src="/art/brain-world/awake.png" alt="" draggable={false} style={{maskImage:`radial-gradient(ellipse 28% 30% at ${brainRegions[d].x}% ${brainRegions[d].y}%, black 55%, transparent 100%)`,"--wake-delay":`${i*.4}s`} as CSSProperties} />)}
+    {active.map((d,i)=><img key={d} className={`brain-awake ${speaker===d?"region-speaking":"region-listening"}`} src="/art/brain-world/awake.png" alt="" draggable={false} style={{maskImage:`radial-gradient(ellipse 28% 30% at ${brainRegions[d].x}% ${brainRegions[d].y}%, black 55%, transparent 100%)`,"--wake-delay":`${i*.4}s`} as CSSProperties} />)}
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="brain-signals" aria-hidden="true">
       <defs><filter id={neonId}><feGaussianBlur stdDeviation=".65" /></filter></defs>
-      {active.map((d,i)=>{const p=brainRegions[d];const path=`M 50 49 Q ${p.x} 49 ${p.x} ${p.y}`;return <g key={d} style={{"--signal":p.color,"--signal-duration":`${speaker===d?1.1:2.5+i*.32}s`,"--wake-delay":`${i*.4}s`} as CSSProperties} className={`brain-route ${speaker===d?"is-speaking":""}`}>
+      {active.map((d,i)=>{const p=brainRegions[d];const path=speaker===d ? `M ${p.x} ${p.y} Q ${p.x} 49 50 49` : `M 50 49 Q ${p.x} 49 ${p.x} ${p.y}`;return <g key={d} style={{"--signal":p.color,"--signal-duration":`${speaker===d?1.1:2.5+i*.32}s`,"--wake-delay":`${i*.4}s`} as CSSProperties} className={`brain-route ${speaker===d?"is-speaking":""}`}>
         <path d={path} className="signal-halo" style={{filter:`url(#${neonId})`}} /><path d={path} className="signal-track" /><path d={path} className="signal-runner" />
+        {mode==="debate"&&<circle cx={p.x} cy={p.y} r="4.1" className="speaker-ring" />}
         <circle cx={p.x} cy={p.y} r="2.8" className="signal-node-halo" style={{filter:`url(#${neonId})`}} /><circle cx={p.x} cy={p.y} r=".65" className="signal-node" />
       </g>;})}
       {active.length>0&&<><circle className="brain-junction-halo" style={{filter:`url(#${neonId})`}} cx="50" cy="49" r="3" /><circle className="brain-junction" cx="50" cy="49" r=".8" /></>}
     </svg>
+    {onRegionSelect&&<div className="brain-region-targets">{districts.map(d=><button key={d} style={{left:`${brainRegions[d].x}%`,top:`${brainRegions[d].y}%`,"--region":brainRegions[d].color} as CSSProperties} aria-label={`Ask ${districtInfo[d].name} a question`} onClick={()=>onRegionSelect(d)}><span>Ask {districtInfo[d].name} ↗</span></button>)}</div>}
     {mode==="dream"&&<div className="dream-moon" aria-hidden="true">☾</div>}
-    <div className="brain-region-labels" aria-hidden="true">{districts.map(d=><span key={d} className={active.includes(d)?"region-on":"region-off"} style={{left:`${brainRegions[d].x}%`,top:`${brainRegions[d].y+13}%`,"--region":brainRegions[d].color} as CSSProperties}>{districtInfo[d].name}</span>)}</div>
+    <div className="brain-region-labels" aria-hidden="true">{districts.map(d=><span key={d} className={`${active.includes(d)?"region-on":"region-off"} ${speaker===d?"label-speaking":""}`} style={{left:`${brainRegions[d].x}%`,top:`${brainRegions[d].y+13}%`,"--region":brainRegions[d].color} as CSSProperties}>{districtInfo[d].name}</span>)}</div>
   </div>;
 }
 

@@ -90,3 +90,67 @@
 
 .still-mind .brain-world *,.still-mind .plan-bridge * { animation:none!important; transition:none!important; }
 .still-mind .brain-route,.still-mind .brain-awake { opacity:1; }
+
+/* Speaking is a separate state from a priority merely being relevant. */
+.brain-debate .brain-awake { animation:none; opacity:.12; filter:brightness(.7) saturate(.65); transition:opacity .65s ease,filter .65s ease; }
+.brain-debate .brain-awake.region-speaking { opacity:1; filter:brightness(1.3) saturate(1.25); }
+.brain-debate .brain-route { animation:none; opacity:.14; transition:opacity .6s ease; }
+.brain-debate .brain-route.is-speaking { opacity:1; }
+.brain-debate .brain-dormant { filter:brightness(.48) saturate(.5); }
+.brain-debate .is-speaking .signal-halo { stroke-width:1.5; opacity:1; }
+.brain-debate .is-speaking .signal-runner { stroke-width:.65; stroke-dasharray:.65 3; }
+.speaker-ring { fill:none; stroke:var(--signal); stroke-width:.32; opacity:0; transition:opacity .6s; }
+.is-speaking .speaker-ring { opacity:.95; stroke-dasharray:1 1; animation:speaker-orbit 12s linear infinite; transform-box:fill-box; transform-origin:center; }
+.brain-debate .brain-junction-halo { fill:var(--speaking-color,#d6c0f3); transition:fill .6s; }
+.brain-debate .brain-region-labels { display:block; }
+.brain-debate .brain-region-labels .region-on { opacity:.35; box-shadow:none; }
+.brain-debate .brain-region-labels .label-speaking { opacity:1; color:#fff8ed; border:1px solid var(--region); box-shadow:0 0 24px color-mix(in srgb,var(--region) 45%,transparent); background:#1c1429ee; font-weight:bold; }
+.journey-stage.scene-debate { left:24px;right:24px;top:150px;bottom:112px;width:auto;max-width:1120px;margin:0 auto;padding:18px 22px 18px; }
+.debate-theatre { display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px;align-items:stretch;margin:14px 0 10px; }
+.brain-debate-strip { position:relative;max-width:none;width:100%;height:auto;min-height:240px;margin:0;overflow:hidden;border:1px solid #d6bbec20;border-radius:23px;background:radial-gradient(ellipse at 50% 60%,#3a254240,#151020 75%); }
+.brain-debate-strip .brain-world { width:100%;margin:0;aspect-ratio:3/2; }
+.brain-speaker-beacon { display:flex;align-items:center;justify-content:center;gap:8px;position:absolute;bottom:10px;left:12px;right:12px;color:var(--beacon);font-size:12px; }
+.brain-speaker-beacon span { transition:color .6s; }
+.debate-dialogue { min-width:0;display:flex;flex-direction:column; }
+.scene-debate .now-speaking { margin-bottom:10px;border-color:color-mix(in srgb,var(--voice) 55%,transparent);background:color-mix(in srgb,var(--voice) 9%,#21182d);transition:border-color .6s,background .6s; }
+.scene-debate .now-speaking small { font-size:9px;letter-spacing:1.2px; }
+.scene-debate .now-speaking b { font-size:19px; }
+.scene-debate .transcript-box { flex:1;margin:0;min-height:180px;max-height:clamp(205px,calc(100dvh - 440px),310px);padding:2px 5px 8px 2px; }
+.scene-debate .transcript-box li { padding:13px 14px; }
+.scene-debate .transcript-box li.line-current { background:color-mix(in srgb,var(--voice) 10%,#21182d);box-shadow:inset 3px 0 0 var(--voice);border:1px solid color-mix(in srgb,var(--voice) 45%,transparent);border-radius:15px; }
+.scene-debate .transcript-box p { font-size:15px;line-height:1.65; }
+.scene-debate .stage-action { position:static;margin:12px 0 0;padding:10px 0 0;background:none; }
+.scene-debate .stage-action.split { grid-template-columns:1fr minmax(160px,280px); }
+.scene-debate .stage-action .text-button { justify-self:start; }
+.debate-plan-details,.debate-ask-details { font-size:12px;color:#ccbdd8;margin:8px 0; }
+.debate-plan-details summary,.debate-ask-details summary { cursor:pointer; }
+.debate-plan-details .plan-chip { margin-top:12px; }
+.scene-debate .debate-controls { margin:8px 0; }
+@keyframes speaker-orbit { to{transform:rotate(360deg)} }
+@media(max-width:760px) { .journey-stage.scene-debate{left:12px;right:12px;top:145px;bottom:100px;padding:17px 15px}.debate-theatre{grid-template-columns:1fr;gap:12px}.brain-debate-strip{min-height:0}.brain-debate-strip .brain-world{width:min(430px,100%);margin:0 auto}.brain-speaker-beacon{bottom:6px;font-size:11px}.scene-debate .transcript-box{min-height:180px;max-height:280px}.scene-debate .stage-action.split{grid-template-columns:auto 1fr} }
+@media(prefers-reduced-motion:reduce) { .brain-debate .brain-awake,.brain-debate .brain-route,.speaker-ring{transition:none;animation:none} }
+
+.debate-title { display:flex;align-items:center;justify-content:space-between;gap:15px;margin:8px 0 12px; }
+.scene-debate .debate-title h2 { margin:0; }
+.scene-debate .debate-title .stage-action { margin:0;padding:0;min-width:285px; }
+.scene-debate .debate-title .stage-action.split { grid-template-columns:auto minmax(140px,1fr);gap:14px; }
+.scene-debate .now-speaking .secondary { background:#ffffff08;color:#e4d2ee;border:1px solid #bda2d34a; }
+@media(max-width:760px) { .debate-title{align-items:stretch;flex-direction:column;gap:10px}.scene-debate .debate-title .stage-action{min-width:0}.scene-debate .debate-title .stage-action.split{grid-template-columns:1fr 1fr} }
+
+/* Preserve the whole map; emphasis comes from state, not a camera zoom. */
+.debate-theatre { grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr); }
+.brain-debate-strip .brain-world { width:min(450px,100%);margin:6px auto 20px; }
+.brain-debate-strip .brain-region-labels span { font-size:10px; }
+.brain-region-targets { position:absolute;inset:0; }
+.brain-region-targets button { position:absolute;width:25%;height:25%;transform:translate(-50%,-50%);background:transparent;border:1px solid transparent;border-radius:45%;padding:0;cursor:pointer; }
+.brain-region-targets button:hover,.brain-region-targets button:focus-visible { border-color:var(--region);box-shadow:0 0 25px color-mix(in srgb,var(--region) 25%,transparent);outline:none; }
+.brain-region-targets button span { position:absolute;left:50%;top:100%;transform:translateX(-50%);white-space:nowrap;background:#21172ff2;border:1px solid var(--region);border-radius:20px;padding:5px 9px;font-size:10px;color:#f3e8fa;opacity:0;transition:opacity .2s;pointer-events:none; }
+.brain-region-targets button:hover span,.brain-region-targets button:focus-visible span { opacity:1; }
+.intro-brain-map { width:min(300px,100%);margin:0 auto 10px; }
+.intro-brain-map .brain-world { border-radius:20px; }
+@media(max-width:760px) { .debate-theatre{grid-template-columns:1fr}.brain-debate-strip .brain-world{width:min(360px,100%);margin:0 auto 24px}.intro-brain-map{width:min(250px,100%)} }
+
+.debate-theatre .brain-debate-strip{align-self:start}.debate-dialogue .debate-ask-details{margin:0 0 10px}.debate-dialogue .ask{margin:8px 0}.debate-dialogue .ask-answer{font-size:13px;line-height:1.6}
+
+.scene-debate .ask-answer { color:#f0e6f5; background:#2a2139; border-left:3px solid var(--voice); }
+.scene-debate .ask-questions button { color:#e6d8ee; background:#ffffff08; border:1px solid #bfa5d338; }

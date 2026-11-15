@@ -173,7 +173,7 @@ export default function JourneyStage(props: Props) {
         {j.scene === "listen" && <Listen {...props} advance={advance} />}
         {j.scene === "closing" && <Closing {...props} advance={advance} />}
       </section>
-      {!post && j.scene !== "intervention" && <Ribbon state={w.state} rules={c} />}
+      {!post && j.scene !== "intervention" && j.scene !== "debate" && <Ribbon state={w.state} rules={c} />}
     </>
   );
 }
@@ -358,6 +358,7 @@ function Introductions({ journey: j, dispatch, advance, onSpeaker }: SceneProps)
       <span className="cosmic-eyebrow">MEET YOUR VOICES · {j.line + 1} OF 4</span>
       <h2 tabIndex={-1}>Four voices, one shared day.</h2>
       <p className="stage-lede">They speak for different priorities. They don't vote: {c.residentCount} residents do.</p>
+      <div className="intro-brain-map"><BrainWorld active={[d]} speaker={d} mode="debate" /></div>
       <article className="persona-card" style={{ "--voice": districtInfo[d].color } as CSSProperties} key={d}>
         <span className="persona-mark"><VoiceIcon d={d} size={64} speaking /></span>
         <div>
@@ -418,46 +419,32 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
   return (
     <>
       <span className="cosmic-eyebrow">DAY {w.state.day} · THE DEBATE · DECISION CHAMBER</span>
-      <h2 tabIndex={-1}>Hear them argue it out.</h2>
-      <div className="brain-debate-strip"><BrainWorld active={districts.filter(d=>d!=="C" || c.connectionLastOpenDay>=w.state.day)} speaker={speaker} mode="debate" /></div>
-      <div className="now-speaking" style={{ "--voice": color(current.speaker) } as CSSProperties} aria-live="polite">
-        {current.speaker === "N" ? <span className="line-mark">✳</span> : <VoiceIcon d={current.speaker} size={40} speaking />}
+      <div className="debate-title"><h2 tabIndex={-1}>Hear them argue it out.</h2>
+      {done ? (
+        <Primary label="Review the plans" onClick={() => advance("debate")} />
+      ) : (
+        <div className="stage-action split">
+          <button className="text-button" onClick={() => advance("debate")}>Skip debate</button>
+          <button className="cosmic-primary" onClick={() => dispatch({ type: "line", line: shown + 1 })}>
+            Next line <ArrowRight size={15} />
+          </button>
+        </div>
+      )}
+      </div>
+      <div className="debate-theatre">
+      <div className="brain-debate-strip"><BrainWorld active={districts.filter(d=>d!=="C" || c.connectionLastOpenDay>=w.state.day || speaker===d)} speaker={speaker} mode="debate" onRegionSelect={d=>{setAsking(d);setAsked(null);setAuto(false);}} /><div className="brain-speaker-beacon" style={{"--beacon":speaker?districtInfo[speaker].color:"#d5c2ed"} as CSSProperties}>{speaker&&<VoiceIcon d={speaker} size={25} speaking={auto&&!done}/>}<span>{speaker ? `${districtInfo[speaker].name} is speaking` : "The voices are listening"}</span></div></div>
+      <div className="debate-dialogue">
+      <div className="now-speaking" style={{ "--voice": color(speaker ?? "N") } as CSSProperties} aria-live="polite">
+        {speaker === null ? <span className="line-mark">✳</span> : <VoiceIcon d={speaker} size={40} speaking={auto&&!done} />}
         <span>
-          <small>NOW SPEAKING · LINE {shown + 1} OF {lines.length}</small>
-          <b>{speakerName(current.speaker)}</b>
+          <small>{asked?.line===shown ? "ANSWERING YOUR QUESTION" : `LINE ${shown + 1} OF ${lines.length}`}</small>
+          <b>{speakerName(speaker ?? "N")}</b>
         </span>
         <button className="secondary small" disabled={done} onClick={() => setAuto(!auto)} aria-pressed={auto && !done}>
           {auto && !done ? <Pause size={13} /> : <Play size={13} />} {done ? "Finished" : auto ? "Pause" : "Auto-play"}
         </button>
       </div>
-      <ol
-        className="transcript transcript-box"
-        ref={box}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          setPinned(el.scrollTop + el.clientHeight >= el.scrollHeight - 24);
-        }}
-      >
-        {lines.slice(0, shown + 1).map((l, i) => (
-          <TranscriptLine key={i} line={l} current={i === shown} />
-        ))}
-      </ol>
-      {!pinned && (
-        <button className="jump-latest" onClick={() => { setPinned(true); box.current?.scrollTo({ top: box.current.scrollHeight }); }}>
-          Jump to the latest line ↓
-        </button>
-      )}
-      {current.policy !== undefined && (
-        <PlanChip policy={w.proposals[current.policy]} f={f[current.policy]} rules={c} />
-      )}
-      <div className="debate-controls">
-        {!soundOn && <button className="text-button" onClick={onSound}>Enable debate sounds</button>}
-        <button className="text-button" disabled={done} onClick={() => dispatch({ type: "line", line: lines.length - 1 })}>
-          Show full exchange
-        </button>
-      </div>
-      <div className="ask">
-        <span>Ask a voice</span>
+      <details className="debate-ask-details" open={asking!==null}><summary>Ask a voice</summary><div className="ask">
         <div>
           {districts.map((d) => (
             <button key={d} aria-pressed={asking === d} onClick={() => setAsking(asking === d ? null : d)}
@@ -478,17 +465,35 @@ function Debate({ journey: j, dispatch, advance, onSpeaker, soundOn, onSound }: 
             <b>{districtInfo[asked.d].name}:</b> {answer(asked.d, asked.q, start, w.proposals, c)}
           </p>
         )}
-      </div>
-      {done ? (
-        <Primary label="Review the plans" onClick={() => advance("debate")} />
-      ) : (
-        <div className="stage-action split">
-          <button className="text-button" onClick={() => advance("debate")}>Skip debate</button>
-          <button className="cosmic-primary" onClick={() => dispatch({ type: "line", line: shown + 1 })}>
-            Next line <ArrowRight size={15} />
-          </button>
-        </div>
+      </div></details>
+      <ol
+        className="transcript transcript-box"
+        ref={box}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setPinned(el.scrollTop + el.clientHeight >= el.scrollHeight - 24);
+        }}
+      >
+        {lines.slice(0, shown + 1).map((l, i) => (
+          <TranscriptLine key={i} line={l} current={i === shown} />
+        ))}
+      </ol>
+      {!pinned && (
+        <button className="jump-latest" onClick={() => { setPinned(true); box.current?.scrollTo({ top: box.current.scrollHeight }); }}>
+          Jump to the latest line ↓
+        </button>
       )}
+      </div>
+      </div>
+      <details className="debate-plan-details"><summary>See the plan in this argument</summary>{current.policy !== undefined && <PlanChip policy={w.proposals[current.policy]} f={f[current.policy]} rules={c} />}</details>
+      <div className="debate-controls">
+        {!soundOn && <button className="text-button" onClick={onSound}>Enable debate sounds</button>}
+        <button className="text-button" disabled={done} onClick={() => dispatch({ type: "line", line: lines.length - 1 })}>
+          Show full exchange
+        </button>
+      </div>
+
+
     </>
   );
 }
